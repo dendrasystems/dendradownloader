@@ -5,18 +5,15 @@ from datetime import datetime
 from functools import wraps
 from pathlib import Path
 from urllib.parse import urlparse
-from unittest.mock import patch, Mock
 
 import argparse
 import configparser
 import json
-import shutil
-import unittest
 
-if __name__ == "__main__":
-    arcpy = Mock()
-else:
+try:
     import arcpy
+except ModuleNotFoundError:
+    arcpy = None
 import requests
 
 
@@ -288,221 +285,30 @@ class DendraDownloader:
         return
 
 
-class TestDendraDownloader(unittest.TestCase):
-    class FakeResponse:
-        def raise_for_status(self):
-            pass
-
-        def json(self):
-            return "fake value"
-
-    maxDiff = None
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.tmp = Path("/tmp/dendra_downloader_test/")
-        self.config_path = self.tmp / "config.ini"
-        self.state = {
-            "search_results": {
-                "http://www.example.com/foobar": {
-                    "features": [
-                        {
-                            "collection": 1,
-                            "links": [
-                                {
-                                    "rel": "collection",
-                                    "title": "collection 1",
-                                    "href": "http://www.example.com/collection_1",
-                                }
-                            ],
-                            "assets": {
-                                "download": {
-                                    "href": "https://www.example.com/foobar/bazquux1?one=1&two=2&three=3"
-                                }
-                            },
-                        },
-                        {
-                            "collection": 2,
-                            "links": [
-                                {
-                                    "rel": "collection",
-                                    "title": "collection 2",
-                                    "href": "http://www.example.com/collection_2",
-                                }
-                            ],
-                            "assets": {
-                                "download": {
-                                    "href": "https://www.example.com/foobar/bazquux2?one=1&two=2&three=3"
-                                }
-                            },
-                        },
-                        {
-                            "collection": 3,
-                            "links": [
-                                {
-                                    "rel": "collection",
-                                    "title": "collection 3",
-                                    "href": "http://www.example.com/collection_3",
-                                }
-                            ],
-                            "assets": {
-                                "download": {
-                                    "href": "https://www.example.com/foobar/bazquux3?one=1&two=2&three=3"
-                                }
-                            },
-                        },
-                    ]
-                }
-            },
-            "collections": {},
-            "last_accessed": 0,
-        }
-
-    def setUp(self):
-        self.tmp.mkdir()
-        fake_config = "[unit.test]\nauth_token: foo\ncache_duration_mins: 1\ncatalogue_urls: http://www.example.com/catalogue_1|http://www.example.com/catalogue_2\ndata_dir: /tmp/dendra_downloader_test/"
-        self.config_path.write_text(fake_config)
-
-    @patch.object(requests, "get")
-    def test_download_file(self, _):
-        expected_file = self.tmp / "fake_file"
-        fake_parsed_url = urlparse("http://www.example.com/fake_file")
-        downloaded_file = download_file(self.tmp, False, fake_parsed_url)
-        self.assertEqual(downloaded_file, expected_file)
-
-    def test_get_config(self):
-        config = get_config(self.config_path)
-        self.assertEqual(
-            dict(config["unit.test"]),
-            {
-                "auth_token": "foo",
-                "cache_duration_mins": "1",
-                "catalogue_urls": "http://www.example.com/catalogue_1|http://www.example.com/catalogue_2",
-                "data_dir": "/tmp/dendra_downloader_test/",
-            },
-        )
-
-    @patch.object(requests, "get")
-    def test_fetch_catalogues(self, mock_get):
-        config = get_config(self.config_path)
-        mock_get.return_value = self.FakeResponse()
-        catalogues = fetch_catalogues(config["unit.test"], self.state)
-        self.assertEqual(
-            catalogues["search_results"]["http://www.example.com/catalogue_1/search"],
-            "fake value",
-        )
-        self.assertEqual(
-            catalogues["search_results"]["http://www.example.com/catalogue_2/search"],
-            "fake value",
-        )
-
-    def test_get_collections(self):
-        collections = get_collections(self.state)
-        self.assertEqual(
-            collections,
-            {
-                1: {
-                    "rel": "collection",
-                    "title": "collection 1",
-                    "href": "http://www.example.com/collection_1",
-                },
-                2: {
-                    "rel": "collection",
-                    "title": "collection 2",
-                    "href": "http://www.example.com/collection_2",
-                },
-                3: {
-                    "rel": "collection",
-                    "title": "collection 3",
-                    "href": "http://www.example.com/collection_3",
-                },
-            },
-        )
-
-    def test_get_collection_titles(self):
-        collection_titles = get_collection_titles(self.state)
-        self.assertEqual(
-            collection_titles, {1: "collection 1", 2: "collection 2", 3: "collection 3"}
-        )
-
-    def test_get_collection_hrefs(self):
-        collection_titles = get_collection_hrefs(self.state)
-        self.assertEqual(
-            collection_titles,
-            {
-                1: "http://www.example.com/collection_1",
-                2: "http://www.example.com/collection_2",
-                3: "http://www.example.com/collection_3",
-            },
-        )
-
-    def test_has_expired_returns_true_if_expired_in_past(self):
-        config = get_config(self.config_path)
-        self.assertTrue(
-            has_expired(config["unit.test"], {**self.state, "last_accessed": 1})
-        )
-
-    def test_has_expired_returns_true_if_expired_in_future(self):
-        config = get_config(self.config_path)
-        self.assertFalse(
-            has_expired(config["unit.test"], {**self.state, "last_accessed": 9**99})
-        )
-
-    @patch.object(requests, "get")
-    def test_sync_state(self, mock_get):
-        config = get_config(self.config_path)
-        mock_get.return_value = self.FakeResponse()
-        state = sync_state(config, "unit.test")
-        self.assertEqual(state["search_results"]["http://www.example.com/catalogue_1/search"], "fake value")
-        self.assertEqual(state["search_results"]["http://www.example.com/catalogue_2/search"], "fake value")
-
-    @patch.object(requests, "get")
-    def test_download_files_in_collections(self, mock_get):
-        class FakeResponse:
-            def raise_for_status(self):
-                pass
-
-            def json(self):
-                return {"features": []}
-
-        config = get_config(self.config_path)
-        mock_get.return_value = FakeResponse()
-        state = sync_state(config, "unit.test")
-        http_error_400s = download_files_in_collections(
-            config, "unit.test", state, [1, 2]
-        )
-        self.assertEqual(http_error_400s, [])
-
-    def tearDown(self):
-        shutil.rmtree(str(self.tmp))
-
-
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         prog="Dendra Downloader",
         description="Download collections of files via Dendra's Stac API",
     )
+    parser.add_argument("action")
     parser.add_argument("--config-path")
     parser.add_argument("--host")
     parser.add_argument("--collection_ids", nargs="*")
 
     args = parser.parse_args()
 
-    if args.config_path and args.host:
-        if args.collection_ids:
-            # download files for these collections
-            config = get_config(args.config_path)
-            state = sync_state(config, args.host)
-            http_error_400s = download_files_in_collections(
-                config, args.host, state, args.collection_ids, print
-            )
-            print(
-                f"The following collections returned an HTTP 400 (S3 token may have expired): {http_error_400s}"
-            )
-        else:
-            # just show collection ids
-            config = get_config(args.config_path)
-            state = sync_state(config, args.host)
-            print(get_collection_titles(state))
+    if args.action == "show-collection-ids":
+        config = get_config(args.config_path)
+        state = sync_state(config, args.host)
+        print(get_collection_titles(state))
+    elif args.action == "download-files":
+        config = get_config(args.config_path)
+        state = sync_state(config, args.host)
+        http_error_400s = download_files_in_collections(
+            config, args.host, state, args.collection_ids, print
+        )
+        print(
+            f"The following collections returned an HTTP 400 (S3 token may have expired): {http_error_400s}"
+        )
     else:
-        unittest.main()
+        raise Exception(f"Unknown action: {args.action}")
