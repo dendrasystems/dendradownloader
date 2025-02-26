@@ -35,9 +35,9 @@ data_dir_help_text = "data_dir is required"
 # Anything that returns a SettingsError as default value is a required setting
 SETTINGS = {
     "auth_token": lambda obj, name: obj.get(name, SettingsError(auth_token_help_text)),
-    "catalogue_urls": lambda obj, name: obj.get(
-        name, SettingsError(catalogue_urls_help_text)
-    ).split("|"),
+    "catalogue_urls": lambda obj, name: obj.get(name).split("|")
+    if obj.get(name)
+    else SettingsError(catalogue_urls_help_text),
     "data_dir": lambda obj, name: obj.get(name, SettingsError(data_dir_help_text)),
     "redownload": lambda obj, name: obj.getboolean(name, False),
     "add_to_active_map": lambda obj, name: obj.getboolean(name, False),
