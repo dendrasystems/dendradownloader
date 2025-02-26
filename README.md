@@ -18,10 +18,10 @@ The ini group name is the connection name.
 | auth_token          | `true`   | -       | Your token to authenticate with the API                                                                           |
 | catalogue_urls      | `true`   | -       | A pipe-separated list of URLs of stac catalogue urls                                                              |
 | data_dir            | `true`   | -       | The output directory to put the downloaded files. This will be created, if it doesn't exist                       |
-| cache_duration_mins | `true`   | -       | The STAC catalog response is cached to disk to reduce read time                                                   |
-| redownload          | `true`   | -       | If `false`, files that have already been downloaded will be skipped                                               |
-| add_to_active_map   | `true`   | -       | If there is an active map, data will be added to the map once it has been downloaded. Only works for tif sources. |
-
+| cache_duration_mins | `false`  | 10      | The STAC catalog response is cached to disk to reduce read time                                                   |
+| redownload          | `false`  | false   | If `false`, files that have already been downloaded will be skipped                                               |
+| add_to_active_map   | `false`  | false   | If there is an active map, data will be added to the map once it has been downloaded. Only works for tif sources. |
+  * [ ] 
 Example config.ini
 ```
 [dendra]
