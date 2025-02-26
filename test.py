@@ -116,8 +116,10 @@ class TestDendraDownloader(unittest.TestCase):
     @patch.object(requests, "get")
     def test_fetch_catalogues(self, mock_get):
         config = dd.get_config(self.config_path)
+        auth_token = dd.get_setting(config, "unit.test", "auth_token")
+        catalogue_urls = dd.get_setting(config, "unit.test", "catalogue_urls")
         mock_get.return_value = self.FakeResponse()
-        catalogues = dd.fetch_catalogues(config["unit.test"], self.state)
+        catalogues = dd.fetch_catalogues(auth_token, self.state, catalogue_urls)
         self.assertEqual(
             catalogues["search_results"]["http://www.example.com/catalogue_1/search"],
             "fake value",
@@ -169,14 +171,16 @@ class TestDendraDownloader(unittest.TestCase):
 
     def test_has_expired_returns_true_if_expired_in_past(self):
         config = dd.get_config(self.config_path)
+        cache_duration_mins = dd.get_setting(config, "unit.test", "cache_duration_mins")
         self.assertTrue(
-            dd.has_expired(config["unit.test"], {**self.state, "last_accessed": 1})
+            dd.has_expired(cache_duration_mins, {**self.state, "last_accessed": 1})
         )
 
-    def test_has_expired_returns_true_if_expired_in_future(self):
+    def test_has_expired_returns_false_if_expired_in_future(self):
         config = dd.get_config(self.config_path)
+        cache_duration_mins = dd.get_setting(config, "unit.test", "cache_duration_mins")
         self.assertFalse(
-            dd.has_expired(config["unit.test"], {**self.state, "last_accessed": 9**99})
+            dd.has_expired(cache_duration_mins, {**self.state, "last_accessed": 9**99})
         )
 
     @patch.object(requests, "get")

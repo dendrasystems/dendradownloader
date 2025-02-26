@@ -63,3 +63,8 @@ Or download files:
 ./dendra_downloader.pyt download-files --config-path=/path/to/config.ini --host=aus.develop --collection-ids 564, 581
 ```
 
+You can also check your settings:
+
+``` shell
+ ./dendra_downloader.pyt show-settings --config-path=/Users/thomas/Documents/config.ini --host=aus.develop
+```

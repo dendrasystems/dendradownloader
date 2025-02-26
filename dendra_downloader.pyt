@@ -20,6 +20,44 @@ import requests
 Parameters = namedtuple("Parameters", ["config", "hosts", "collections"])
 
 
+class SettingsError(Exception):
+    pass
+
+
+app_integrations_url = "https://aus.dendradev.io/internal/account/app-integrations"
+
+auth_token_help_text = f"auth_token is required. Copy it from {app_integrations_url}"
+catalogue_urls_help_text = (
+    f"catalogue_urls is requred. See STAC project URLs at {app_integrations_url}"
+)
+data_dir_help_text = "data_dir is required"
+
+# Anything that returns a SettingsError as default value is a required setting
+SETTINGS = {
+    "auth_token": lambda obj, name: obj.get(name, SettingsError(auth_token_help_text)),
+    "catalogue_urls": lambda obj, name: obj.get(
+        name, SettingsError(catalogue_urls_help_text)
+    ).split("|"),
+    "data_dir": lambda obj, name: obj.get(name, SettingsError(data_dir_help_text)),
+    "redownload": lambda obj, name: obj.getboolean(name, False),
+    "add_to_active_map": lambda obj, name: obj.getboolean(name, False),
+    "cache_duration_mins": lambda obj, name: obj.getint(name, 10),
+}
+
+
+def get_setting(config, host, setting_name):
+    """Try to get a setting from the config file, fall back to SETTINGS"""
+    if setting_name not in SETTINGS:
+        raise Exception(f"Unknown setting name: {setting_name}")
+
+    setting_value = SETTINGS[setting_name](config[host], setting_name)
+
+    if isinstance(setting_value, SettingsError):
+        raise setting_value
+
+    return setting_value
+
+
 def params(fn):
     @wraps(fn)
     def with_params(self, parameters, *args, **kwargs):
@@ -49,15 +87,14 @@ def get_config(config_path):
     return config
 
 
-def fetch_catalogues(host_config, state):
+def fetch_catalogues(auth_token, state, catalogue_urls):
     state_copy = dict(state)
-    catalogue_urls = host_config["catalogue_urls"].split("|")
 
     for catalogue_url in catalogue_urls:
         catalogue_search_url = catalogue_url + "/search"
         response = requests.get(
             catalogue_search_url,
-            headers={"Authorization": f"Token {host_config['auth_token']}"},
+            headers={"Authorization": f"Token {auth_token}"},
         )
         response.raise_for_status()
 
@@ -87,15 +124,17 @@ def get_collection_hrefs(state):
     return {k: v["href"] for k, v in collections.items()}
 
 
-def has_expired(host_config, state):
-    cache_duration = host_config.getint("cache_duration_mins") * 60
-    expiry_time = int(state["last_accessed"]) + cache_duration
+def has_expired(cache_duration_mins, state):
+    cache_duration_secs = cache_duration_mins * 60
+    expiry_time = int(state["last_accessed"]) + cache_duration_secs
     return expiry_time < int(datetime.now().timestamp())
 
 
 def sync_state(config, host, force_refresh=False):
-    host_config = config[host]
-    data_dir = Path(config[host]["data_dir"])
+    data_dir = Path(get_setting(config, host, "data_dir"))
+    auth_token = get_setting(config, host, "auth_token")
+    catalogue_urls = get_setting(config, host, "catalogue_urls")
+    cache_duration_mins = get_setting(config, host, "cache_duration_mins")
 
     if not data_dir.exists():
         data_dir.mkdir()
@@ -110,8 +149,8 @@ def sync_state(config, host, force_refresh=False):
     if state_path.exists():
         state = json.loads(state_path.read_text())
 
-    if force_refresh or has_expired(host_config, state):
-        state = fetch_catalogues(host_config, state)
+    if force_refresh or has_expired(cache_duration_mins, state):
+        state = fetch_catalogues(auth_token, state, catalogue_urls)
         state["last_accessed"] = int(datetime.now().timestamp())
         state_path.write_text(json.dumps(state))
 
@@ -121,8 +160,7 @@ def sync_state(config, host, force_refresh=False):
 def download_files_in_collections(
     config, host, state, collection_ids, on_downloaded=lambda x: x
 ):
-    host_config = config[host]
-    data_dir = Path(host_config["data_dir"])
+    data_dir = Path(get_setting(config, host, "data_dir"))
 
     http_error_400s = []
 
@@ -141,7 +179,7 @@ def download_files_in_collections(
                     on_downloaded(
                         download_file(
                             collection_dir,
-                            config.getboolean(host, "redownload"),
+                            get_setting(config, host, "redownload"),
                             parsed_download_href,
                         )
                     )
@@ -244,13 +282,12 @@ class DendraDownloader:
         host = parameters.hosts.valueAsText
         config_path = Path(parameters.config.valueAsText)
         config = get_config(config_path)
-        host_config = config[host]
-        data_dir = Path(host_config["data_dir"])
+        data_dir = Path(get_setting(config, host, "data_dir"))
         state_path = data_dir / "state.json"
         state = json.loads(state_path.read_text())
         active_map = None
 
-        if config.getboolean(host, "add_to_active_map"):
+        if get_setting(config, host, "add_to_active_map"):
             project = arcpy.mp.ArcGISProject("current")
 
             if project.activeMap:
@@ -297,7 +334,11 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    if args.action == "show-collection-ids":
+    if args.action == "show-settings":
+        config = get_config(args.config_path)
+        for setting_name in SETTINGS:
+            print(f"{setting_name}: {get_setting(config, args.host, setting_name)}")
+    elif args.action == "show-collection-ids":
         config = get_config(args.config_path)
         state = sync_state(config, args.host)
         print(get_collection_titles(state))
