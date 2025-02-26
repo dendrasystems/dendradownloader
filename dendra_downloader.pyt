@@ -24,7 +24,7 @@ class SettingsError(Exception):
     pass
 
 
-app_integrations_url = "https://internal-app.dendra.io/internal/account/app-integrations"
+app_integrations_url = "/internal/account/app-integrations"
 
 REQUIRED_SETTINGS = {
     "auth_token": f"auth_token is required. Copy it from {app_integrations_url}",
