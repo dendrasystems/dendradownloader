@@ -66,5 +66,5 @@ Or download files:
 You can also check your settings:
 
 ``` shell
- ./dendra_downloader.pyt show-settings --config-path=/Users/thomas/Documents/config.ini --host=aus.develop
+ ./dendra_downloader.pyt show-settings --config-path=/path/to/config.ini --host=aus.develop
 ```
