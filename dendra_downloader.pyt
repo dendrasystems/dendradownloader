@@ -40,10 +40,18 @@ CONFIG_DEFAULTS = {
 
 
 def get_setting(config, host, setting_name):
-    setting_value = config[host].get(setting_name)
+    if setting_name == "redownload" or setting_name == "add_to_active_map":
+        setting_value = config[host].getboolean(setting_name)
+    elif setting_name == "cache_duration_mins":
+        setting_value = config[host].getint(setting_name)
+    else:
+        setting_value = config[host].get(setting_name)
 
     if setting_value is None and setting_name in REQUIRED_SETTINGS:
         raise SettingsError(REQUIRED_SETTINGS[setting_name])
+
+    if setting_name == "catalogue_urls":
+        setting_value = setting_value.split("|")
 
     return setting_value
 

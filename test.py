@@ -103,13 +103,16 @@ class TestDendraDownloader(unittest.TestCase):
 
     def test_get_config(self):
         config = dd.get_config(self.config_path)
-        self.assertEqual(
+        self.assertDictEqual(
             dict(config["unit.test"]),
+            # setting types aren't correct because we haven't used getboolean, getint etc
             {
                 "auth_token": "foo",
                 "cache_duration_mins": "1",
                 "catalogue_urls": "http://www.example.com/catalogue_1|http://www.example.com/catalogue_2",
                 "data_dir": "/tmp/dendra_downloader_test/",
+                "redownload": "False",
+                "add_to_active_map": "False"
             },
         )
 
