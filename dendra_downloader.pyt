@@ -26,34 +26,24 @@ class SettingsError(Exception):
 
 app_integrations_url = "https://aus.dendradev.io/internal/account/app-integrations"
 
-auth_token_help_text = f"auth_token is required. Copy it from {app_integrations_url}"
-catalogue_urls_help_text = (
-    f"catalogue_urls is requred. See STAC project URLs at {app_integrations_url}"
-)
-data_dir_help_text = "data_dir is required"
+REQUIRED_SETTINGS = {
+    "auth_token": f"auth_token is required. Copy it from {app_integrations_url}",
+    "catalogue_urls": f"catalogue_urls is requred. See STAC project URLs at {app_integrations_url}",
+    "data_dir": "data_dir is required",
+}
 
-# Anything that returns a SettingsError as default value is a required setting
-SETTINGS = {
-    "auth_token": lambda obj, name: obj.get(name, SettingsError(auth_token_help_text)),
-    "catalogue_urls": lambda obj, name: obj.get(name).split("|")
-    if obj.get(name)
-    else SettingsError(catalogue_urls_help_text),
-    "data_dir": lambda obj, name: obj.get(name, SettingsError(data_dir_help_text)),
-    "redownload": lambda obj, name: obj.getboolean(name, False),
-    "add_to_active_map": lambda obj, name: obj.getboolean(name, False),
-    "cache_duration_mins": lambda obj, name: obj.getint(name, 10),
+CONFIG_DEFAULTS = {
+    "redownload": False,
+    "add_to_active_map": False,
+    "cache_duration_mins": 10,
 }
 
 
 def get_setting(config, host, setting_name):
-    """Try to get a setting from the config file, fall back to SETTINGS"""
-    if setting_name not in SETTINGS:
-        raise Exception(f"Unknown setting name: {setting_name}")
+    setting_value = config[host].get(setting_name)
 
-    setting_value = SETTINGS[setting_name](config[host], setting_name)
-
-    if isinstance(setting_value, SettingsError):
-        raise setting_value
+    if setting_value is None and setting_name in REQUIRED_SETTINGS:
+        raise SettingsError(REQUIRED_SETTINGS[setting_name])
 
     return setting_value
 
@@ -82,7 +72,7 @@ def download_file(data_dir, replace_existing, parsed_url):
 
 
 def get_config(config_path):
-    config = configparser.ConfigParser()
+    config = configparser.ConfigParser(defaults=CONFIG_DEFAULTS)
     config.read([config_path])
     return config
 
@@ -336,7 +326,9 @@ if __name__ == "__main__":
 
     if args.action == "show-settings":
         config = get_config(args.config_path)
-        for setting_name in SETTINGS:
+        for setting_name in list(REQUIRED_SETTINGS.keys()) + list(
+            CONFIG_DEFAULTS.keys()
+        ):
             print(f"{setting_name}: {get_setting(config, args.host, setting_name)}")
     elif args.action == "show-collection-ids":
         config = get_config(args.config_path)
