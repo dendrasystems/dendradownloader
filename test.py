@@ -1,11 +1,12 @@
 import importlib.util
 from importlib.machinery import SourceFileLoader
 from pathlib import Path
-from unittest.mock import patch, Mock
+from unittest.mock import patch
 import shutil
 import unittest
 from urllib.parse import urlparse
 import requests
+import tempfile
 
 
 def import_from_file(module_name, file_path):
@@ -31,8 +32,6 @@ class TestDendraDownloader(unittest.TestCase):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.tmp = Path("/tmp/dendra_downloader_test/")
-        self.config_path = self.tmp / "config.ini"
         self.state = {
             "search_results": {
                 "http://www.example.com/foobar": {
@@ -90,8 +89,9 @@ class TestDendraDownloader(unittest.TestCase):
         }
 
     def setUp(self):
-        self.tmp.mkdir()
-        fake_config = "[unit.test]\nauth_token: foo\ncache_duration_mins: 1\ncatalogue_urls: http://www.example.com/catalogue_1|http://www.example.com/catalogue_2\ndata_dir: /tmp/dendra_downloader_test/"
+        self.tmp = Path(tempfile.mkdtemp())
+        self.config_path = self.tmp / "config.ini"
+        fake_config = f"[unit.test]\nauth_token: foo\ncache_duration_mins: 1\ncatalogue_urls: http://www.example.com/catalogue_1|http://www.example.com/catalogue_2\ndata_dir: {self.tmp}"
         self.config_path.write_text(fake_config)
 
     @patch.object(requests, "get")
@@ -110,9 +110,9 @@ class TestDendraDownloader(unittest.TestCase):
                 "auth_token": "foo",
                 "cache_duration_mins": "1",
                 "catalogue_urls": "http://www.example.com/catalogue_1|http://www.example.com/catalogue_2",
-                "data_dir": "/tmp/dendra_downloader_test/",
+                "data_dir": str(self.tmp),
                 "redownload": "False",
-                "add_to_active_map": "False"
+                "add_to_active_map": "False",
             },
         )
 
