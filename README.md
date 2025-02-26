@@ -42,3 +42,24 @@ add_to_active_map: false
 
 This will begin the download process for all the downloadable resources. Files are organised by their parent collection, in the case of the Dendra catalogue, 
 this means the outputs are organised by AOI. 
+
+## Testing
+
+You will need to have `requests` installed to run the tests. Run the unit tests with:
+
+``` shell
+python test.py
+```
+
+Or test manually by running the script from the command line to show collection ids:
+
+``` shell
+./dendra_downloader.pyt show-collection-ids --config-path=/path/to/config.ini--host=aus.develop
+```
+
+Or download files:
+
+``` shell
+./dendra_downloader.pyt download-files --config-path=/path/to/config.ini --host=aus.develop --collection-ids 564, 581
+```
+

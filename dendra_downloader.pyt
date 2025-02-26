@@ -293,7 +293,7 @@ if __name__ == "__main__":
     parser.add_argument("action")
     parser.add_argument("--config-path")
     parser.add_argument("--host")
-    parser.add_argument("--collection_ids", nargs="*")
+    parser.add_argument("--collection-ids", nargs="*")
 
     args = parser.parse_args()
 
