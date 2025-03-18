@@ -1,3 +1,54 @@
+
+[project]
+name = "dendradownloader"
+description = "Download STAC resources to a local directory"
+license = {text = "MIT"}
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "requests (>=2.32.3,<3.0.0)"
+]
+
+[tool.poetry]
+package-mode = false
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.3.5"
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.ruff]
+target-version = "py39"
+line-length = 119
+
 [tool.ruff.lint]
-# Include flake8-bandit
-select = ["S"]
+select = [
+  # standard flake8
+  "E4",
+  "E5",
+  "E7",
+  "E9",
+  "F",
+  "W",
+  "ERA001", # flake8-eradicate (commented-out code)
+  "S",      # flake8-bandit
+  "I",      # isort
+  "UP",     # pyupgrade
+  "T201",   # print
+  "UP014",  # NamedTuple formatting
+]
+
+
+[tool.ruff.lint.isort]
+section-order = [
+  'future',
+  'standard-library',
+  'third-party',
+  'first-party',
+  'local-folder',
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S101"]
