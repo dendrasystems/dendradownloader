@@ -1,6 +1,3 @@
-[tool.ruff.lint]
-# Include flake8-bandit
-select = ["S"]
 
 [project]
 name = "dendradownloader"

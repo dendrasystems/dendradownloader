@@ -1,9 +1,10 @@
 import importlib.util
 from importlib.machinery import SourceFileLoader
-from unittest.mock import patch, MagicMock, ANY
+from unittest.mock import ANY, MagicMock, patch
 from urllib.parse import urlparse
-import requests
+
 import pytest
+import requests
 
 
 def import_from_file(module_name, file_path):
@@ -20,7 +21,9 @@ dd = import_from_file("./dendra_downloader.pyt", "dendra_downloader.pyt")
 @pytest.fixture
 def config_file(tmpdir):
     config_path = tmpdir / "config.ini"
-    fake_config = f"[unit.test]\nauth_token: foobar\ncatalogue_url: http://www.example.com/catalogue_1\ndata_dir: {tmpdir}"
+    fake_config = (
+        f"[unit.test]\nauth_token: foobar\ncatalogue_url: http://www.example.com/catalogue_1\ndata_dir: {tmpdir}"
+    )
     config_path.write_text(fake_config, encoding="utf-8")
     return tmpdir, config_path
 
@@ -89,8 +92,8 @@ def test_load_settings(config_file):
     assert settings.auth_token == "foobar"
     assert settings.catalogue_url == "http://www.example.com/catalogue_1"
     assert settings.data_dir == data_dir
-    assert settings.redownload == False
-    assert settings.add_to_active_map == False
+    assert not settings.redownload
+    assert not settings.add_to_active_map
 
 
 def test_show_settings(config_file, capsys):
@@ -126,7 +129,6 @@ def test_download_file(mock_requests, tmpdir):
 
 @patch.object(requests, "get")
 def test_search(mock_request):
-
     dd.search("foobar", "http://www.example.com/catalogue_1")
     mock_request.assert_called_with(
         "http://www.example.com/catalogue_1/search",
@@ -147,9 +149,7 @@ def test_get_available_collections(mock_request, collections_response):
     mock_get = mock_request.return_value = MagicMock()
     mock_get.json.return_value = collections_response
 
-    response = dd.get_available_collections(
-        "foobar", "http://www.example.com/catalogue_1"
-    )
+    response = dd.get_available_collections("foobar", "http://www.example.com/catalogue_1")
     mock_request.assert_called_with(
         "http://www.example.com/catalogue_1/collections",
         headers={"Authorization": "Token foobar"},
@@ -174,9 +174,7 @@ def test_download_files_in_collections(config_file, search_response):
         mock_search.return_value = search_response
         http_error_400s = dd.download_files_in_collections(settings, ["1"], print)
 
-        mock_search.assert_called_with(
-            "foobar", "http://www.example.com/catalogue_1", ["1"]
-        )
+        mock_search.assert_called_with("foobar", "http://www.example.com/catalogue_1", ["1"])
         mock_download.assert_called_with(
             data_dir / "Collection 1",
             False,
@@ -214,11 +212,8 @@ class TestCommandLine:
 
         assert capsys.readouterr().out.split("\n") == expected
 
-
     @patch.object(requests, "get")
-    def test_command_line_show_collection_ids(
-        self, mock_request, config_file, collections_response, capsys
-    ):
+    def test_command_line_show_collection_ids(self, mock_request, config_file, collections_response, capsys):
         _, config_path = config_file
 
         mock_get = mock_request.return_value = MagicMock()
@@ -239,13 +234,10 @@ class TestCommandLine:
 
         assert capsys.readouterr().out == "1 Collection1\n"
 
-
     @patch.object(dd, "download_files_in_collections", return_value=[])
-    def test_command_line_download_files(
-        self, mock_download_files, config_file
-    ):
+    def test_command_line_download_files(self, mock_download_files, config_file):
         _, config_path = config_file
-        
+
         with patch(
             "sys.argv",
             [
@@ -261,6 +253,4 @@ class TestCommandLine:
         ):
             dd.command_line()
 
-        mock_download_files.assert_called_with(
-            ANY, ["1"], print 
-        )
+        mock_download_files.assert_called_with(ANY, ["1"], print)

@@ -1,20 +1,18 @@
 #!/usr/bin/env python3
 
+import argparse
+import configparser
 from collections import namedtuple
 from functools import wraps
 from pathlib import Path
-from urllib.parse import urlparse
 from typing import Optional
-
-import argparse
-import configparser
+from urllib.parse import urlparse
 
 try:
     import arcpy
 except ModuleNotFoundError:
     arcpy = None
 import requests
-
 
 Parameters = namedtuple("Parameters", ["config", "hosts", "collections"])
 
@@ -70,19 +68,18 @@ class Settings:
             raise SettingsError(REQUIRED_SETTINGS[setting_name])
 
         return setting_value
-    
+
     def show_settings(self):
         for attr in dir(self):
-            if not attr in self.settings:
+            if attr not in self.settings:
                 continue
 
             value = getattr(self, attr)
-            
-            if attr == "auth_token":
-                print(f"{attr}: {value[:5]}{'*' * (len(value) - 5)}")
-                continue
-            print(f"{attr}: {value}")
 
+            if attr == "auth_token":
+                print(f"{attr}: {value[:5]}{'*' * (len(value) - 5)}")  # noqa: T201
+                continue
+            print(f"{attr}: {value}")  # noqa: T201
 
 
 def params(fn):
@@ -93,8 +90,14 @@ def params(fn):
 
     return with_params
 
+
 def format_mb(size):
     return f"{size / 1024 / 1024:.2f}"
+
+
+def progress_bar(done, total, progress):
+    return f"\r[{'=' * done}{' ' * (50 - done)}] {format_mb(progress)}/{format_mb(total)} MiB"
+
 
 def download_file(data_dir, replace_existing, parsed_url):
     local_filename = parsed_url.path.split("/")[-1]
@@ -103,10 +106,10 @@ def download_file(data_dir, replace_existing, parsed_url):
     if not local_file_path.exists() or replace_existing:
         with requests.get(parsed_url.geturl(), stream=True) as response:
             response.raise_for_status()
-            
+
             total_size = int(response.headers.get("content-length", 0))
             downloaded_size = 0
-            
+
             with open(str(local_file_path), "wb") as f:
                 for chunk in response.iter_content(chunk_size=100 * 1024):
                     f.write(chunk)
@@ -115,11 +118,11 @@ def download_file(data_dir, replace_existing, parsed_url):
                         done = 0
                     else:
                         done = int(50 * downloaded_size / total_size)
-                    print(
-                        f"\r[{'=' * done}{' ' * (50 - done)}] {format_mb(downloaded_size)}/{format_mb(total_size)} MiB",
+                    print(  # noqa: T201
+                        progress_bar(done, total_size, downloaded_size),
                         end="",
                     )
-            print()
+            print()  # noqa: T201
 
     return local_file_path
 
@@ -130,13 +133,12 @@ def get_config(config_path):
     return config
 
 
-def search(auth_token, catalogue_url, collection_ids = None):
-
+def search(auth_token, catalogue_url, collection_ids=None):
     catalogue_search_url = catalogue_url + "/search"
 
     if collection_ids:
         catalogue_search_url += f"?collections={','.join(collection_ids)}"
-    
+
     response = requests.get(
         catalogue_search_url,
         headers={"Authorization": f"Token {auth_token}"},
@@ -150,7 +152,7 @@ def search(auth_token, catalogue_url, collection_ids = None):
 def get_available_collections(auth_token, catalogue_url) -> list[str]:
     """
     Use the collections endpoint to get a list of collections for each catalogue.
-    
+
     ConformanceClass: https://api.stacspec.org/v1.0.0/collections
     """
 
@@ -174,16 +176,12 @@ def get_collection_title(item) -> Optional[str]:
     Returns the title of the collection if it exists, otherwise None.
     """
     try:
-        return next(
-            link["title"] for link in item["links"] if link["rel"] == "collection"
-        )
+        return next(link["title"] for link in item["links"] if link["rel"] == "collection")
     except StopIteration:
         pass
 
 
-def download_files_in_collections(
-    settings: Settings, collection_ids: list[str], on_downloaded=lambda x: x
-):
+def download_files_in_collections(settings: Settings, collection_ids: list[str], on_downloaded=lambda x: x):
     data_dir = settings.data_dir
 
     http_error_400s = []
@@ -227,7 +225,6 @@ class Toolbox:
 
 
 class DendraDownloader:
-    
     def __init__(self):
         """
         Define the tool (tool name is the name of the class).
@@ -277,7 +274,7 @@ class DendraDownloader:
         """
         Modify the values and properties of parameters before internal
         validation is performed.
-        
+
         This method is called whenever a parameter has been changed.
         """
         return
@@ -286,8 +283,8 @@ class DendraDownloader:
     def updateMessages(self, parameters):
         """
         Modify the messages created by internal validation for each tool
-        parameter. 
-        
+        parameter.
+
         This method is called after internal validation.
         """
         if parameters.config.altered:
@@ -298,15 +295,15 @@ class DendraDownloader:
         if parameters.hosts.altered:
             config_path = Path(parameters.config.valueAsText)
             settings = Settings(config_path, parameters.hosts.valueAsText)
-            parameters.collections.filters[0].list = get_available_collections(settings.auth_token, settings.catalogue_url)
-        
+            parameters.collections.filters[0].list = get_available_collections(
+                settings.auth_token, settings.catalogue_url
+            )
 
     @params
     def execute(self, parameters, messages):
         """
         Download the requested resources.
         """
-        # messages.addMessage(response.json())
         host = parameters.hosts.valueAsText
         config_path = Path(parameters.config.valueAsText)
         settings = Settings(config_path, host)
@@ -321,34 +318,25 @@ class DendraDownloader:
         def update_arcgis(local_file_path):
             local_file_path_name = str(local_file_path)
             messages.addMessage(local_file_path_name)
-            if active_map and (
-                local_file_path.suffix.lower() == ".tif"
-                or local_file_path.suffix == ".tiff"
-            ):
+            if active_map and (local_file_path.suffix.lower() == ".tif" or local_file_path.suffix == ".tiff"):
                 active_map.addDataFromPath(local_file_path_name)
 
-        collection_ids = [
-            value[0].split()[0] for value in parameters.collections.values
-        ]
-        http_error_400s = download_files_in_collections(
-            settings, collection_ids, update_arcgis
-        )
+        collection_ids = [value[0].split()[0] for value in parameters.collections.values]
+        http_error_400s = download_files_in_collections(settings, collection_ids, update_arcgis)
 
         # 400 happens when s3 token expires, retry once
         if http_error_400s:
-            download_files_in_collections(
-                settings, http_error_400s, update_arcgis
-            )
+            download_files_in_collections(settings, http_error_400s, update_arcgis)
 
     def postExecute(self, parameters):
         """This method takes place after outputs are processed and
         added to the display."""
         return
-    
+
 
 def command_line():
     actions = ["show-settings", "show-collection-ids", "download-files"]
-    
+
     parser = argparse.ArgumentParser(
         prog="Dendra Downloader",
         description="Download collections of files via Dendra's Stac API",
@@ -362,24 +350,20 @@ def command_line():
 
     if args.action not in actions:
         raise Exception(f"Unknown action: {args.action}")
-    
+
     settings = Settings(args.config_path, args.host)
 
     if args.action == "show-settings":
         settings.show_settings()
-    
+
     elif args.action == "show-collection-ids":
-        print("\n".join(get_available_collections(settings.auth_token, settings.catalogue_url)))
-    
+        print("\n".join(get_available_collections(settings.auth_token, settings.catalogue_url)))  # noqa: T201
+
     elif args.action == "download-files":
-        http_error_400s = download_files_in_collections(
-            settings, args.collection_ids, print
-        )
-        
+        http_error_400s = download_files_in_collections(settings, args.collection_ids, print)
+
         if http_error_400s:
-            print(
-                f"The following collections returned an HTTP 400 (S3 token may have expired): {http_error_400s}"
-            )
+            print(f"The following collections returned an HTTP 400 (S3 token may have expired): {http_error_400s}")  # noqa: T201
 
 
 if __name__ == "__main__":
