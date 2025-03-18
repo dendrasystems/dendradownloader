@@ -33,8 +33,17 @@ REQUIRED_SETTINGS = {
 
 
 class Settings:
-    _config = None
-    _host = None
+    config = None
+    host = None
+
+    settings = [
+        "auth_token",
+        "catalogue_url",
+        "data_dir",
+        "redownload",
+        "add_to_active_map",
+    ]
+
     auth_token: str = None
     catalogue_url: str = None
     data_dir: Path = None
@@ -42,8 +51,8 @@ class Settings:
     add_to_active_map: bool = False
 
     def __init__(self, config_path, host):
-        self._config = get_config(config_path)
-        self._host = host
+        self.config = get_config(config_path)
+        self.host = host
         self.auth_token = self._get_setting("auth_token")
         self.catalogue_url = self._get_setting("catalogue_url")
         self.data_dir = Path(self._get_setting("data_dir"))
@@ -53,19 +62,20 @@ class Settings:
         Retrieve the setting from the config file.
         """
         if setting_name == "redownload" or setting_name == "add_to_active_map":
-            setting_value = self._config[self._host].getboolean(setting_name)
+            setting_value = self.config[self.host].getboolean(setting_name)
         else:
-            setting_value = self._config[self._host].get(setting_name)
+            setting_value = self.config[self.host].get(setting_name)
 
         if setting_value is None and setting_name in REQUIRED_SETTINGS:
             raise SettingsError(REQUIRED_SETTINGS[setting_name])
 
         return setting_value
     
-    def _show_settings(self):
+    def show_settings(self):
         for attr in dir(self):
-            if attr.startswith("_"):
+            if not attr in self.settings:
                 continue
+
             value = getattr(self, attr)
             
             if attr == "auth_token":
@@ -106,7 +116,7 @@ def download_file(data_dir, replace_existing, parsed_url):
                     else:
                         done = int(50 * downloaded_size / total_size)
                     print(
-                        f"\r[{'=' * done}{' ' * (50 - done)}] {format_mb(downloaded_size)}/{format_mb(total_size)} mb",
+                        f"\r[{'=' * done}{' ' * (50 - done)}] {format_mb(downloaded_size)}/{format_mb(total_size)} MiB",
                         end="",
                     )
             print()
@@ -334,9 +344,9 @@ class DendraDownloader:
         """This method takes place after outputs are processed and
         added to the display."""
         return
+    
 
-
-if __name__ == "__main__":
+def command_line():
     actions = ["show-settings", "show-collection-ids", "download-files"]
     
     parser = argparse.ArgumentParser(
@@ -356,7 +366,7 @@ if __name__ == "__main__":
     settings = Settings(args.config_path, args.host)
 
     if args.action == "show-settings":
-        settings._show_settings()
+        settings.show_settings()
     
     elif args.action == "show-collection-ids":
         print("\n".join(get_available_collections(settings.auth_token, settings.catalogue_url)))
@@ -370,3 +380,7 @@ if __name__ == "__main__":
             print(
                 f"The following collections returned an HTTP 400 (S3 token may have expired): {http_error_400s}"
             )
+
+
+if __name__ == "__main__":
+    command_line()

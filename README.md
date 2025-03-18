@@ -16,19 +16,18 @@ The ini group name is the connection name.
 | Option              | Required | Default | Description                                                                                                       |
 |---------------------|----------|---------|-------------------------------------------------------------------------------------------------------------------|
 | auth_token          | `true`   | -       | Your token to authenticate with the API                                                                           |
-| catalogue_urls      | `true`   | -       | A pipe-separated list of URLs of stac catalogue urls                                                              |
+| catalogue_url      | `true`   | -       | The URL for a STAC catalogue urls                                                              |
 | data_dir            | `true`   | -       | The output directory to put the downloaded files. This will be created, if it doesn't exist                       |
-| cache_duration_mins | `false`  | 10      | The STAC catalog response is cached to disk to reduce read time                                                   |
 | redownload          | `false`  | false   | If `false`, files that have already been downloaded will be skipped                                               |
 | add_to_active_map   | `false`  | false   | If there is an active map, data will be added to the map once it has been downloaded. Only works for tif sources. |
-  * [ ] 
+
+
 Example config.ini
 ```
 [dendra]
 auth_token: <auth_token>
-catalogue_urls: <stac_catalogue_url_1>|<stac_catalogue_url_2>
+catalogue_url: <stac_catalogue_url_1>
 data_dir: <output_dir>
-cache_duration_mins: 10
 redownload: false
 add_to_active_map: false
 ```
@@ -45,26 +44,32 @@ this means the outputs are organised by AOI.
 
 ## Testing
 
-You will need to have `requests` installed to run the tests. Run the unit tests with:
+Install the test requirements:
+
+```shell
+poetry install --with dev
+```
+
+Run the unit tests with:
 
 ``` shell
-python test.py
+pytest tests/
 ```
 
 Or test manually by running the script from the command line to show collection ids:
 
 ``` shell
-./dendra_downloader.pyt show-collection-ids --config-path=/path/to/config.ini--host=aus.develop
+./dendra_downloader.pyt show-collection-ids --config-path=/path/to/config.ini--host=develop
 ```
 
 Or download files:
 
 ``` shell
-./dendra_downloader.pyt download-files --config-path=/path/to/config.ini --host=aus.develop --collection-ids 564, 581
+./dendra_downloader.pyt download-files --config-path=/path/to/config.ini --host=develop --collection-ids 564, 581
 ```
 
 You can also check your settings:
 
 ``` shell
-./dendra_downloader.pyt show-settings --config-path=/path/to/config.ini --host=aus.develop
+./dendra_downloader.pyt show-settings --config-path=/path/to/config.ini --host=develop
 ```

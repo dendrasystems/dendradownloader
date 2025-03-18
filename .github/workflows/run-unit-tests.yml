@@ -33,4 +33,6 @@ jobs:
         ruff check .
     - name: Test with unittest
       run: |
-        python test.py
+        pip install poetry
+        poetry install --with dev
+        py.test tests/
