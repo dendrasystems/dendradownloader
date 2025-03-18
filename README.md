@@ -32,6 +32,25 @@ redownload: false
 add_to_active_map: false
 ```
 
+If you have more than one project, you can set up multiple sections and then switch between them in the toolbox UI.
+Using a `DEFAULT` section prevents you needing to repeat common values.
+
+Example config.ini with multiple sections
+```
+[DEFAULT]
+auth_token: <auth_token>
+redownload: false
+add_to_active_map: false
+
+[project1]
+catalogue_url: <stac_catalogue_url_1>
+data_dir: output/project1
+
+[project2]
+catalogue_url: <stac_catalogue_url_2>
+data_dir: output/project2
+```
+
 ## Usage
 
 1. Open up the toolbox
