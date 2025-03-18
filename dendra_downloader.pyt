@@ -104,7 +104,7 @@ def download_file(data_dir, replace_existing, parsed_url):
     local_file_path = data_dir / local_filename
 
     if not local_file_path.exists() or replace_existing:
-        with requests.get(parsed_url.geturl(), stream=True) as response:
+        with requests.get(parsed_url.geturl(), stream=True) as response:  # noqa: S113
             response.raise_for_status()
 
             total_size = int(response.headers.get("content-length", 0))

@@ -89,7 +89,7 @@ def test_load_settings(config_file):
     data_dir, config_path = config_file
     settings = dd.Settings(config_path, "unit.test")
 
-    assert settings.auth_token == "foobar"
+    assert settings.auth_token == "foobar"  # noqa s105
     assert settings.catalogue_url == "http://www.example.com/catalogue_1"
     assert settings.data_dir == data_dir
     assert not settings.redownload
