@@ -190,10 +190,15 @@ def download_files_in_collections(settings: Settings, collection_ids: list[str],
     for feature in search_results["features"]:
         collection_id = feature["collection"]
         collection_dir = data_dir / get_collection_title(feature)
+
+        # Organize by survey date if available
+        if datetime := feature["properties"].get("datetime"):
+            collection_dir /= datetime[:7]
+
         parsed_download_href = urlparse(feature["assets"]["download"]["href"])
 
         if not collection_dir.exists():
-            collection_dir.mkdir()
+            collection_dir.mkdir(parents=True)
 
         try:
             on_downloaded(
