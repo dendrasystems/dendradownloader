@@ -47,6 +47,9 @@ def collections_response():
 def item_response():
     return {
         "id": "1",
+        "properties": {
+            "datetime": "2020-01-01T00:00:00Z",
+        },
         "assets": {
             "download": {
                 "href": "https://fake.com/rgbdownload.tif",
@@ -176,7 +179,7 @@ def test_download_files_in_collections(config_file, search_response):
 
         mock_search.assert_called_with("foobar", "http://www.example.com/catalogue_1", ["1"])
         mock_download.assert_called_with(
-            data_dir / "Collection 1",
+            data_dir / "Collection 1" / "2020-01",
             False,
             urlparse("https://fake.com/rgbdownload.tif"),
         )
