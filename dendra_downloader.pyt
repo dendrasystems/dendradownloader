@@ -3,6 +3,7 @@
 import argparse
 import configparser
 from collections import namedtuple
+from collections.abc import Generator
 from functools import wraps
 from pathlib import Path
 from urllib.parse import ParseResult, urlparse
@@ -132,7 +133,21 @@ def get_config(config_path: str | Path):
     return config
 
 
-def search(auth_token: str, catalogue_url: str, collection_ids: list[str] | None = None) -> dict:
+def get_next_link(response_data: dict) -> str | None:
+    """
+    Retrieve the next link from the response data.
+
+    Returns the next link if it exists, otherwise None.
+    """
+    try:
+        return next(link["href"] for link in response_data["links"] if link["rel"] == "next")
+    except StopIteration:
+        pass
+
+
+def search(
+    auth_token: str, catalogue_url: str, collection_ids: list[str] | None = None
+) -> Generator[list[dict], None, None]:
     """
     Use STAC search API to retrieve matching items.
 
@@ -143,14 +158,18 @@ def search(auth_token: str, catalogue_url: str, collection_ids: list[str] | None
     if collection_ids:
         catalogue_search_url += f"?collections={','.join(collection_ids)}"
 
-    response = requests.get(
-        catalogue_search_url,
-        headers={"Authorization": f"Token {auth_token}"},
-        timeout=60,
-    )
-    response.raise_for_status()
+    while catalogue_search_url:
+        response = requests.get(
+            catalogue_search_url,
+            headers={"Authorization": f"Token {auth_token}"},
+            timeout=60,
+        )
+        response.raise_for_status()
+        response_data = response.json()
 
-    return response.json()
+        yield from response_data["features"]
+
+        catalogue_search_url = get_next_link(response_data)
 
 
 def get_available_collections(auth_token: str, catalogue_url: str) -> list[str]:
@@ -193,7 +212,7 @@ def download_files_in_collections(
     http_error_400s = []
 
     search_results = search(settings.auth_token, settings.catalogue_url, collection_ids)
-    for feature in search_results["features"]:
+    for feature in search_results:
         collection_id = feature["collection"]
         collection_dir = data_dir / get_collection_title(feature)
         parsed_download_href = urlparse(feature["assets"]["download"]["href"])
