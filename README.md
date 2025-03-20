@@ -72,23 +72,23 @@ poetry install --with dev
 Run the unit tests with:
 
 ``` shell
-pytest tests/
+poetry run pytest tests/
 ```
 
 Or test manually by running the script from the command line to show collection ids:
 
 ``` shell
-./dendra_downloader.pyt show-collection-ids --config-path=/path/to/config.ini--host=develop
+poetry run ./dendra_downloader.pyt show-collection-ids --config-path=/path/to/config.ini--host=develop
 ```
 
 Or download files:
 
 ``` shell
-./dendra_downloader.pyt download-files --config-path=/path/to/config.ini --host=develop --collection-ids 564, 581
+poetry run ./dendra_downloader.pyt download-files --config-path=/path/to/config.ini --host=develop --collection-ids 564, 581
 ```
 
 You can also check your settings:
 
 ``` shell
-./dendra_downloader.pyt show-settings --config-path=/path/to/config.ini --host=develop
+poetry run ./dendra_downloader.pyt show-settings --config-path=/path/to/config.ini --host=develop
 ```
