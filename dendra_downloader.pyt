@@ -3,10 +3,10 @@
 import argparse
 import configparser
 from collections import namedtuple
+from collections.abc import Generator
 from functools import wraps
 from pathlib import Path
-from typing import Optional
-from urllib.parse import urlparse
+from urllib.parse import ParseResult, urlparse
 
 try:
     import arcpy
@@ -48,14 +48,14 @@ class Settings:
     redownload: bool = False
     add_to_active_map: bool = False
 
-    def __init__(self, config_path, host):
+    def __init__(self, config_path: str | Path, host: str):
         self.config = get_config(config_path)
         self.host = host
         self.auth_token = self._get_setting("auth_token")
         self.catalogue_url = self._get_setting("catalogue_url")
         self.data_dir = Path(self._get_setting("data_dir"))
 
-    def _get_setting(self, setting_name):
+    def _get_setting(self, setting_name: str) -> bool | str:
         """
         Retrieve the setting from the config file.
         """
@@ -69,7 +69,7 @@ class Settings:
 
         return setting_value
 
-    def show_settings(self):
+    def show_settings(self) -> None:
         for attr in dir(self):
             if attr not in self.settings:
                 continue
@@ -91,15 +91,15 @@ def params(fn):
     return with_params
 
 
-def format_mb(size):
+def format_mb(size: int) -> str:
     return f"{size / 1024 / 1024:.2f}"
 
 
-def progress_bar(done, total, progress):
+def progress_bar(done: int, total: int, progress: int) -> str:
     return f"\r[{'=' * done}{' ' * (50 - done)}] {format_mb(progress)}/{format_mb(total)} MiB"
 
 
-def download_file(data_dir, replace_existing, parsed_url):
+def download_file(data_dir: str | Path, replace_existing: bool, parsed_url: ParseResult) -> str:
     local_filename = parsed_url.path.split("/")[-1]
     local_file_path = data_dir / local_filename
 
@@ -127,29 +127,52 @@ def download_file(data_dir, replace_existing, parsed_url):
     return local_file_path
 
 
-def get_config(config_path):
+def get_config(config_path: str | Path):
     config = configparser.ConfigParser()
     config.read([config_path])
     return config
 
 
-def search(auth_token, catalogue_url, collection_ids=None):
+def get_next_link(response_data: dict) -> str | None:
+    """
+    Retrieve the next link from the response data.
+
+    Returns the next link if it exists, otherwise None.
+    """
+    try:
+        return next(link["href"] for link in response_data["links"] if link["rel"] == "next")
+    except StopIteration:
+        pass
+
+
+def search(
+    auth_token: str, catalogue_url: str, collection_ids: list[str] | None = None
+) -> Generator[list[dict], None, None]:
+    """
+    Use STAC search API to retrieve matching items.
+
+    ConformsTo: https://api.stacspec.org/v1.0.0/item-search
+    """
     catalogue_search_url = catalogue_url + "/search"
 
     if collection_ids:
         catalogue_search_url += f"?collections={','.join(collection_ids)}"
 
-    response = requests.get(
-        catalogue_search_url,
-        headers={"Authorization": f"Token {auth_token}"},
-        timeout=60,
-    )
-    response.raise_for_status()
+    while catalogue_search_url:
+        response = requests.get(
+            catalogue_search_url,
+            headers={"Authorization": f"Token {auth_token}"},
+            timeout=60,
+        )
+        response.raise_for_status()
+        response_data = response.json()
 
-    return response.json()
+        yield from response_data["features"]
+
+        catalogue_search_url = get_next_link(response_data)
 
 
-def get_available_collections(auth_token, catalogue_url) -> list[str]:
+def get_available_collections(auth_token: str, catalogue_url: str) -> list[str]:
     """
     Use the collections endpoint to get a list of collections for each catalogue.
 
@@ -169,7 +192,7 @@ def get_available_collections(auth_token, catalogue_url) -> list[str]:
     return [f"{collection['id']} {collection['title']}" for collection in collections]
 
 
-def get_collection_title(item) -> Optional[str]:
+def get_collection_title(item: dict) -> str | None:
     """
     Retrieve the collection name from the item's links.
 
@@ -181,13 +204,15 @@ def get_collection_title(item) -> Optional[str]:
         pass
 
 
-def download_files_in_collections(settings: Settings, collection_ids: list[str], on_downloaded=lambda x: x):
+def download_files_in_collections(
+    settings: Settings, collection_ids: list[str], on_downloaded=lambda x: x
+) -> list[str]:
     data_dir = settings.data_dir
 
     http_error_400s = []
 
     search_results = search(settings.auth_token, settings.catalogue_url, collection_ids)
-    for feature in search_results["features"]:
+    for feature in search_results:
         collection_id = feature["collection"]
         collection_dir = data_dir / get_collection_title(feature)
 

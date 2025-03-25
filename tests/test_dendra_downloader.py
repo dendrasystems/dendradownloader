@@ -1,6 +1,6 @@
 import importlib.util
 from importlib.machinery import SourceFileLoader
-from unittest.mock import ANY, MagicMock, patch
+from unittest.mock import ANY, MagicMock, call, patch
 from urllib.parse import urlparse
 
 import pytest
@@ -79,7 +79,12 @@ def search_response(item_response):
     return {
         "type": "FeatureCollection",
         "features": [item_response],
-        "links": [],
+        "links": [
+            {
+                "href": "https://fake.io/api/stac/v1/1/2/search?limit=5&offset=5",
+                "rel": "next",
+            }
+        ],
         "numberMatched": 1,
         "numberReturned": 1,
     }
@@ -130,16 +135,38 @@ def test_download_file(mock_requests, tmpdir):
     assert downloaded_file == expected_file
 
 
-@patch.object(requests, "get")
-def test_search(mock_request):
-    dd.search("foobar", "http://www.example.com/catalogue_1")
-    mock_request.assert_called_with(
-        "http://www.example.com/catalogue_1/search",
-        headers={"Authorization": "Token foobar"},
-        timeout=60,
-    )
+def test_get_next_link(search_response):
+    assert dd.get_next_link(search_response) == "https://fake.io/api/stac/v1/1/2/search?limit=5&offset=5"
+    assert dd.get_next_link({"links": []}) is None
 
-    dd.search("foobar", "http://www.example.com/catalogue_1", ["1", "2"])
+
+@patch.object(requests, "get")
+def test_search(mock_request, search_response):
+    mock_get = mock_request.return_value = MagicMock()
+    mock_get.json.side_effect = [search_response, {"features": [], "links": []}]
+
+    features = list(dd.search("foobar", "http://www.example.com/catalogue_1"))
+    mock_request.assert_has_calls(
+        [
+            call("http://www.example.com/catalogue_1/search", headers={"Authorization": "Token foobar"}, timeout=60),
+            call().raise_for_status(),
+            call().json(),
+            call(
+                "https://fake.io/api/stac/v1/1/2/search?limit=5&offset=5",
+                headers={"Authorization": "Token foobar"},
+                timeout=60,
+            ),
+        ]
+    )
+    assert features == search_response["features"]
+
+
+@patch.object(requests, "get")
+def test_search_with_collection_filters(mock_request, item_response):
+    mock_get = mock_request.return_value = MagicMock()
+    mock_get.json.return_value = {"features": [item_response], "links": []}
+
+    list(dd.search("foobar", "http://www.example.com/catalogue_1", ["1", "2"]))
     mock_request.assert_called_with(
         "http://www.example.com/catalogue_1/search?collections=1,2",
         headers={"Authorization": "Token foobar"},
@@ -174,7 +201,7 @@ def test_download_files_in_collections(config_file, search_response):
         patch.object(dd, "search") as mock_search,
         patch.object(dd, "download_file") as mock_download,
     ):
-        mock_search.return_value = search_response
+        mock_search.return_value = search_response["features"]
         http_error_400s = dd.download_files_in_collections(settings, ["1"], print)
 
         mock_search.assert_called_with("foobar", "http://www.example.com/catalogue_1", ["1"])
