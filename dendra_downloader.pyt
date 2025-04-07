@@ -99,8 +99,10 @@ def progress_bar(done: int, total: int, progress: int) -> str:
     return f"\r[{'=' * done}{' ' * (50 - done)}] {format_mb(progress)}/{format_mb(total)} MiB"
 
 
-def download_file(data_dir: str | Path, replace_existing: bool, parsed_url: ParseResult) -> str:
-    local_filename = parsed_url.path.split("/")[-1]
+def download_file(
+    data_dir: str | Path, replace_existing: bool, parsed_url: ParseResult, title: str | None = None
+) -> str:
+    local_filename = title or parsed_url.path.split("/")[-1]
     local_file_path = data_dir / local_filename
 
     if not local_file_path.exists() or replace_existing:
@@ -220,25 +222,27 @@ def download_files_in_collections(
         if datetime := feature["properties"].get("datetime"):
             collection_dir /= datetime[:7]
 
-        parsed_download_href = urlparse(feature["assets"]["download"]["href"])
-
         if not collection_dir.exists():
             collection_dir.mkdir(parents=True)
 
-        try:
-            on_downloaded(
-                download_file(
-                    collection_dir,
-                    settings.redownload,
-                    parsed_download_href,
+        for asset in feature["assets"].values():
+            parsed_download_href = urlparse(asset["href"])
+
+            try:
+                on_downloaded(
+                    download_file(
+                        collection_dir,
+                        settings.redownload,
+                        parsed_download_href,
+                        title=asset.get("title"),
+                    )
                 )
-            )
-        except requests.HTTPError as e:
-            # This happens when an S3 token expires
-            if e.response.status_code == 400:
-                http_error_400s.append(collection_id)
-            else:
-                raise e
+            except requests.HTTPError as e:
+                # This happens when an S3 token expires
+                if e.response.status_code == 400:
+                    http_error_400s.append(collection_id)
+                else:
+                    raise e
 
     return http_error_400s
 
