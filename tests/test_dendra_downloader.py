@@ -209,6 +209,50 @@ def test_download_files_in_collections(config_file, search_response):
             data_dir / "Collection 1" / "2020-01",
             False,
             urlparse("https://fake.com/rgbdownload.tif"),
+            title="RGB",
+        )
+
+    assert http_error_400s == []
+
+
+def test_download_files_in_collections_multiple_assets(config_file, search_response):
+    """
+    Add an extra metadata asset to the search response and check that it is downloaded
+    """
+    data_dir, config_path = config_file
+    settings = dd.Settings(config_path, "unit.test")
+
+    with (
+        patch.object(dd, "search") as mock_search,
+        patch.object(dd, "download_file") as mock_download,
+    ):
+        features = search_response["features"]
+        features[0]["assets"]["metadata"] = {
+            "href": "https://fake.com/metadata.json",
+            "type": "application/json",
+            "title": "Metadata",
+            "roles": ["metadata"],
+        }
+        mock_search.return_value = search_response["features"]
+        http_error_400s = dd.download_files_in_collections(settings, ["1"], print)
+
+        mock_search.assert_called_with("foobar", "http://www.example.com/catalogue_1", ["1"])
+        mock_download.assert_has_calls(
+            [
+                call(
+                    data_dir / "Collection 1" / "2020-01",
+                    False,
+                    urlparse("https://fake.com/rgbdownload.tif"),
+                    title="RGB",
+                ),
+                call(
+                    data_dir / "Collection 1" / "2020-01",
+                    False,
+                    urlparse("https://fake.com/metadata.json"),
+                    title="Metadata",
+                ),
+            ],
+            any_order=True,
         )
 
     assert http_error_400s == []
