@@ -100,9 +100,8 @@ def progress_bar(done: int, total: int, progress: int) -> str:
 
 
 def download_file(
-    data_dir: str | Path, replace_existing: bool, parsed_url: ParseResult, title: str | None = None
+    data_dir: str | Path, replace_existing: bool, parsed_url: ParseResult, local_filename: Path
 ) -> str:
-    local_filename = title or parsed_url.path.split("/")[-1]
     local_file_path = data_dir / local_filename
 
     if not local_file_path.exists() or replace_existing:
@@ -228,13 +227,22 @@ def download_files_in_collections(
         for asset in feature["assets"].values():
             parsed_download_href = urlparse(asset["href"])
 
+            filename = Path(parsed_download_href.path.split("/")[-1])
+
+            # Override the downloaded filename with the asset title if available
+            if asset.get("title"):
+                new_filename = filename.with_name(asset["title"])
+                if not new_filename.suffix:
+                    new_filename = new_filename.with_suffix(filename.suffix)
+                filename = new_filename
+
             try:
                 on_downloaded(
                     download_file(
                         collection_dir,
                         settings.redownload,
                         parsed_download_href,
-                        title=asset.get("title"),
+                        filename,
                     )
                 )
             except requests.HTTPError as e:
@@ -376,8 +384,8 @@ def command_line():
         description="Download collections of files via Dendra's Stac API",
     )
     parser.add_argument("action", choices=actions)
-    parser.add_argument("--config-path")
-    parser.add_argument("--host")
+    parser.add_argument("--config-path", required=True)
+    parser.add_argument("--host", required=True)
     parser.add_argument("--collection-ids", nargs="*")
 
     args = parser.parse_args()

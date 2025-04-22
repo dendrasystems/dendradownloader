@@ -1,5 +1,6 @@
 import importlib.util
 from importlib.machinery import SourceFileLoader
+from pathlib import Path
 from unittest.mock import ANY, MagicMock, call, patch
 from urllib.parse import urlparse
 
@@ -129,9 +130,9 @@ def test_format_mb():
 
 @patch.object(requests, "get")
 def test_download_file(mock_requests, tmpdir):
-    expected_file = tmpdir / "fake_file"
-    fake_parsed_url = urlparse("http://www.example.com/fake_file")
-    downloaded_file = dd.download_file(tmpdir, False, fake_parsed_url)
+    expected_file = tmpdir / "fake_file.xml"
+    fake_parsed_url = urlparse("http://www.example.com/fake_file.xml")
+    downloaded_file = dd.download_file(tmpdir, False, fake_parsed_url, Path("fake_file.xml"))
     assert downloaded_file == expected_file
 
 
@@ -209,7 +210,7 @@ def test_download_files_in_collections(config_file, search_response):
             data_dir / "Collection 1" / "2020-01",
             False,
             urlparse("https://fake.com/rgbdownload.tif"),
-            title="RGB",
+            Path("RGB.tif"),
         )
 
     assert http_error_400s == []
@@ -243,13 +244,13 @@ def test_download_files_in_collections_multiple_assets(config_file, search_respo
                     data_dir / "Collection 1" / "2020-01",
                     False,
                     urlparse("https://fake.com/rgbdownload.tif"),
-                    title="RGB",
+                    Path("RGB.tif"),
                 ),
                 call(
                     data_dir / "Collection 1" / "2020-01",
                     False,
                     urlparse("https://fake.com/metadata.json"),
-                    title="Metadata",
+                    Path("Metadata.json"),
                 ),
             ],
             any_order=True,
