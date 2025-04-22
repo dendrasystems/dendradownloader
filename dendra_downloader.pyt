@@ -99,9 +99,7 @@ def progress_bar(done: int, total: int, progress: int) -> str:
     return f"\r[{'=' * done}{' ' * (50 - done)}] {format_mb(progress)}/{format_mb(total)} MiB"
 
 
-def download_file(
-    data_dir: str | Path, replace_existing: bool, parsed_url: ParseResult, local_filename: Path
-) -> str:
+def download_file(data_dir: str | Path, replace_existing: bool, parsed_url: ParseResult, local_filename: Path) -> str:
     local_file_path = data_dir / local_filename
 
     if not local_file_path.exists() or replace_existing:
