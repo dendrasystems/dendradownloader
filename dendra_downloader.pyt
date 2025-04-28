@@ -2,6 +2,7 @@
 
 import argparse
 import configparser
+import re
 from collections import namedtuple
 from collections.abc import Generator
 from functools import wraps
@@ -100,9 +101,8 @@ def progress_bar(done: int, total: int, progress: int) -> str:
 
 
 def download_file(
-    data_dir: str | Path, replace_existing: bool, parsed_url: ParseResult, title: str | None = None
+    *, data_dir: str | Path, replace_existing: bool, parsed_url: ParseResult, local_filename: Path
 ) -> str:
-    local_filename = title or parsed_url.path.split("/")[-1]
     local_file_path = data_dir / local_filename
 
     if not local_file_path.exists() or replace_existing:
@@ -206,6 +206,41 @@ def get_collection_title(item: dict) -> str | None:
         pass
 
 
+def format_filename(filename: Path) -> str:
+    """
+    Format the filename to be compatible with Windows.
+    """
+    file_name = filename.name
+
+    # Replace invalid characters with an underscore
+    file_name = re.sub(r"[:\"/\|?*]", "", file_name)
+
+    # Special case for <> as they convey meaning
+    file_name = file_name.replace("<", "under")
+    file_name = file_name.replace(">", "over")
+    return filename.with_name(file_name)
+
+
+def prepare_download(asset: dict) -> tuple[ParseResult, Path]:
+    """
+    Parse the asset URL and prepare the filename for download.
+    """
+    parsed_download_href = urlparse(asset["href"])
+
+    filename = Path(parsed_download_href.path.split("/")[-1])
+
+    # Override the downloaded filename with the asset title if available
+    if asset.get("title"):
+        new_filename = filename.with_name(asset["title"])
+        if not new_filename.suffix:
+            new_filename = new_filename.with_suffix(filename.suffix)
+        filename = new_filename
+    # Format the filename to be compatible with Windows
+    filename = format_filename(filename)
+
+    return parsed_download_href, filename
+
+
 def download_files_in_collections(
     settings: Settings, collection_ids: list[str], on_downloaded=lambda x: x
 ) -> list[str]:
@@ -226,15 +261,15 @@ def download_files_in_collections(
             collection_dir.mkdir(parents=True)
 
         for asset in feature["assets"].values():
-            parsed_download_href = urlparse(asset["href"])
+            parsed_download_href, filename = prepare_download(asset)
 
             try:
                 on_downloaded(
                     download_file(
-                        collection_dir,
-                        settings.redownload,
-                        parsed_download_href,
-                        title=asset.get("title"),
+                        data_dir=collection_dir,
+                        replace_existing=settings.redownload,
+                        parsed_url=parsed_download_href,
+                        local_filename=filename,
                     )
                 )
             except requests.HTTPError as e:
@@ -376,8 +411,8 @@ def command_line():
         description="Download collections of files via Dendra's Stac API",
     )
     parser.add_argument("action", choices=actions)
-    parser.add_argument("--config-path")
-    parser.add_argument("--host")
+    parser.add_argument("--config-path", required=True)
+    parser.add_argument("--host", required=True)
     parser.add_argument("--collection-ids", nargs="*")
 
     args = parser.parse_args()

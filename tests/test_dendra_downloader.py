@@ -1,5 +1,6 @@
 import importlib.util
 from importlib.machinery import SourceFileLoader
+from pathlib import Path
 from unittest.mock import ANY, MagicMock, call, patch
 from urllib.parse import urlparse
 
@@ -129,9 +130,11 @@ def test_format_mb():
 
 @patch.object(requests, "get")
 def test_download_file(mock_requests, tmpdir):
-    expected_file = tmpdir / "fake_file"
-    fake_parsed_url = urlparse("http://www.example.com/fake_file")
-    downloaded_file = dd.download_file(tmpdir, False, fake_parsed_url)
+    expected_file = tmpdir / "fake_file.xml"
+    fake_parsed_url = urlparse("http://www.example.com/fake_file.xml")
+    downloaded_file = dd.download_file(
+        data_dir=tmpdir, replace_existing=False, parsed_url=fake_parsed_url, local_filename=Path("fake_file.xml")
+    )
     assert downloaded_file == expected_file
 
 
@@ -206,10 +209,10 @@ def test_download_files_in_collections(config_file, search_response):
 
         mock_search.assert_called_with("foobar", "http://www.example.com/catalogue_1", ["1"])
         mock_download.assert_called_with(
-            data_dir / "Collection 1" / "2020-01",
-            False,
-            urlparse("https://fake.com/rgbdownload.tif"),
-            title="RGB",
+            data_dir=data_dir / "Collection 1" / "2020-01",
+            replace_existing=False,
+            parsed_url=urlparse("https://fake.com/rgbdownload.tif"),
+            local_filename=Path("RGB.tif"),
         )
 
     assert http_error_400s == []
@@ -240,22 +243,48 @@ def test_download_files_in_collections_multiple_assets(config_file, search_respo
         mock_download.assert_has_calls(
             [
                 call(
-                    data_dir / "Collection 1" / "2020-01",
-                    False,
-                    urlparse("https://fake.com/rgbdownload.tif"),
-                    title="RGB",
+                    data_dir=data_dir / "Collection 1" / "2020-01",
+                    replace_existing=False,
+                    parsed_url=urlparse("https://fake.com/rgbdownload.tif"),
+                    local_filename=Path("RGB.tif"),
                 ),
                 call(
-                    data_dir / "Collection 1" / "2020-01",
-                    False,
-                    urlparse("https://fake.com/metadata.json"),
-                    title="Metadata",
+                    data_dir=data_dir / "Collection 1" / "2020-01",
+                    replace_existing=False,
+                    parsed_url=urlparse("https://fake.com/metadata.json"),
+                    local_filename=Path("Metadata.json"),
                 ),
             ],
             any_order=True,
         )
 
     assert http_error_400s == []
+
+
+@pytest.mark.parametrize(
+    "asset,expected_url, expected_filename",
+    [
+        ({"href": "https://fake.com/rgbdownload.tif", "title": "RGB"}, "https://fake.com/rgbdownload.tif", "RGB.tif"),
+        (
+            {"href": "https://fake.com/shapefile.zip", "title": "Area Classification"},
+            "https://fake.com/shapefile.zip",
+            "Area Classification.zip",
+        ),
+        (
+            {"href": "https://fake.com/slope.tif", "title": "Slope < 400m"},
+            "https://fake.com/slope.tif",
+            "Slope under 400m.tif",
+        ),
+    ],
+)
+def test_prepare_download(asset, expected_url, expected_filename):
+    """
+    Test the prepare_download function
+    """
+    parsed_url, local_filename = dd.prepare_download(asset)
+
+    assert local_filename == Path(expected_filename)
+    assert parsed_url.geturl() == expected_url
 
 
 class TestCommandLine:
