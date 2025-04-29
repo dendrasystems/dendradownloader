@@ -128,12 +128,29 @@ def test_format_mb():
     assert dd.format_mb(1024 * 1024 * 1024) == "1024.00"
 
 
+@pytest.mark.parametrize(
+    "size, expected",
+    [
+        (876, "876 B"),
+        (10000, "9.77 KB"),
+        (2340000, "2.23 MB"),
+        (1234567890, "1.15 GB"),
+    ],
+)
+def test_format_bytes(size, expected):
+    assert dd.format_bytes(size) == expected
+
+
 @patch.object(requests, "get")
 def test_download_file(mock_requests, tmpdir):
     expected_file = tmpdir / "fake_file.xml"
     fake_parsed_url = urlparse("http://www.example.com/fake_file.xml")
     downloaded_file = dd.download_file(
-        data_dir=tmpdir, replace_existing=False, parsed_url=fake_parsed_url, local_filename=Path("fake_file.xml")
+        data_dir=tmpdir,
+        replace_existing=False,
+        parsed_url=fake_parsed_url,
+        local_filename=Path("fake_file.xml"),
+        argis_progress_msg="Downloading fake_file.xml",
     )
     assert downloaded_file == expected_file
 
@@ -202,9 +219,11 @@ def test_download_files_in_collections(config_file, search_response):
 
     with (
         patch.object(dd, "search") as mock_search,
+        patch.object(dd, "get_result_count") as mock_result_count,
         patch.object(dd, "download_file") as mock_download,
     ):
         mock_search.return_value = search_response["features"]
+        mock_result_count.return_value = 1
         http_error_400s = dd.download_files_in_collections(settings, ["1"], print)
 
         mock_search.assert_called_with("foobar", "http://www.example.com/catalogue_1", ["1"])
@@ -213,6 +232,7 @@ def test_download_files_in_collections(config_file, search_response):
             replace_existing=False,
             parsed_url=urlparse("https://fake.com/rgbdownload.tif"),
             local_filename=Path("RGB.tif"),
+            argis_progress_msg="(1/1) STAC Items. Downloading assets: (1/1) RGB.tif",
         )
 
     assert http_error_400s == []
@@ -227,6 +247,7 @@ def test_download_files_in_collections_multiple_assets(config_file, search_respo
 
     with (
         patch.object(dd, "search") as mock_search,
+        patch.object(dd, "get_result_count") as mock_result_count,
         patch.object(dd, "download_file") as mock_download,
     ):
         features = search_response["features"]
@@ -237,6 +258,7 @@ def test_download_files_in_collections_multiple_assets(config_file, search_respo
             "roles": ["metadata"],
         }
         mock_search.return_value = search_response["features"]
+        mock_result_count.return_value = 1
         http_error_400s = dd.download_files_in_collections(settings, ["1"], print)
 
         mock_search.assert_called_with("foobar", "http://www.example.com/catalogue_1", ["1"])
@@ -247,12 +269,14 @@ def test_download_files_in_collections_multiple_assets(config_file, search_respo
                     replace_existing=False,
                     parsed_url=urlparse("https://fake.com/rgbdownload.tif"),
                     local_filename=Path("RGB.tif"),
+                    argis_progress_msg="(1/1) STAC Items. Downloading assets: (1/2) RGB.tif",
                 ),
                 call(
                     data_dir=data_dir / "Collection 1" / "2020-01",
                     replace_existing=False,
                     parsed_url=urlparse("https://fake.com/metadata.json"),
                     local_filename=Path("Metadata.json"),
+                    argis_progress_msg="(1/1) STAC Items. Downloading assets: (2/2) Metadata.json",
                 ),
             ],
             any_order=True,
@@ -285,6 +309,28 @@ def test_prepare_download(asset, expected_url, expected_filename):
 
     assert local_filename == Path(expected_filename)
     assert parsed_url.geturl() == expected_url
+
+
+@pytest.mark.parametrize(
+    "query,expected",
+    [
+        ({}, "http://example.com/catalogue_1/search"),
+        ({"collections": "1"}, "http://example.com/catalogue_1/search?collections=1"),
+        ({"collections": ["1", "2"]}, "http://example.com/catalogue_1/search?collections=1,2"),
+        ({"limit": 10}, "http://example.com/catalogue_1/search?limit=10"),
+        ({"offset": 5}, "http://example.com/catalogue_1/search?offset=5"),
+        (
+            {"collections": ["1", "2"], "limit": 10, "offset": 5},
+            "http://example.com/catalogue_1/search?collections=1,2&limit=10&offset=5",
+        ),
+    ],
+)
+def test_get_search_url(query, expected):
+    """
+    Test the search_url correctly formats the URL with query params
+    """
+    url = dd.get_search_url("http://example.com/catalogue_1", query)
+    assert url == expected
 
 
 class TestCommandLine:
