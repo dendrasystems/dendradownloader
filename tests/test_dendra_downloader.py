@@ -299,6 +299,14 @@ def test_download_files_in_collections_multiple_assets(config_file, search_respo
             "https://fake.com/slope.tif",
             "Slope under 400m.tif",
         ),
+        (
+            {
+                "href": "https://fake.com/api/feature-label/geojson_summary?skai_feature=123&category=999&signature=fake",
+                "title": "Stable / Erosion",
+            },
+            "https://fake.com/api/feature-label/geojson_summary?skai_feature=123&category=999&signature=fake",
+            "Stable Erosion.geojson",
+        ),
     ],
 )
 def test_prepare_download(asset, expected_url, expected_filename):

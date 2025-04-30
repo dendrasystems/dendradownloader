@@ -280,19 +280,18 @@ def get_collection_title(item: dict) -> str | None:
         pass
 
 
-def format_filename(filename: Path) -> str:
+def format_for_filename(filename: str) -> str:
     """
     Format the filename to be compatible with Windows.
     """
-    file_name = filename.name
-
     # Replace invalid characters with an underscore
-    file_name = re.sub(r"[:\"/\|?*]", "", file_name)
+    filename = re.sub(r"[:\"/\|?*]", "", filename)
+    filename = re.sub(r"\s+", " ", filename)
 
     # Special case for <> as they convey meaning
-    file_name = file_name.replace("<", "under")
-    file_name = file_name.replace(">", "over")
-    return filename.with_name(file_name)
+    filename = filename.replace("<", "under")
+    filename = filename.replace(">", "over")
+    return filename
 
 
 def prepare_download(asset: dict) -> tuple[ParseResult, Path]:
@@ -305,12 +304,10 @@ def prepare_download(asset: dict) -> tuple[ParseResult, Path]:
 
     # Override the downloaded filename with the asset title if available
     if asset.get("title"):
-        new_filename = filename.with_name(asset["title"])
+        new_filename = filename.with_name(format_for_filename(asset["title"]))
         if not new_filename.suffix:
             new_filename = new_filename.with_suffix(filename.suffix)
         filename = new_filename
-    # Format the filename to be compatible with Windows
-    filename = format_filename(filename)
 
     return parsed_download_href, filename
 
