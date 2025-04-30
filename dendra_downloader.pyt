@@ -53,18 +53,21 @@ class Settings:
     def __init__(self, config_path: str | Path, host: str):
         self.config = get_config(config_path)
         self.host = host
-        self.auth_token = self._get_setting("auth_token")
-        self.catalogue_url = self._get_setting("catalogue_url")
-        self.data_dir = Path(self._get_setting("data_dir"))
+
+        for setting in self.settings:
+            setattr(self, setting, self._get_setting(setting))
 
     def _get_setting(self, setting_name: str) -> bool | str:
         """
         Retrieve the setting from the config file.
         """
-        if setting_name == "redownload" or setting_name == "add_to_active_map":
-            setting_value = self.config[self.host].getboolean(setting_name)
-        else:
-            setting_value = self.config[self.host].get(setting_name)
+        match setting_name:
+            case "redownload" | "add_to_active_map":
+                setting_value = self.config[self.host].getboolean(setting_name)
+            case "data_dir":
+                setting_value = Path(self.config[self.host].get(setting_name))
+            case _:
+                setting_value = self.config[self.host].get(setting_name)
 
         if setting_value is None and setting_name in REQUIRED_SETTINGS:
             raise SettingsError(REQUIRED_SETTINGS[setting_name])
@@ -484,7 +487,6 @@ class DendraDownloader:
         config_path = Path(parameters.config.valueAsText)
         settings = Settings(config_path, host)
         active_map = None
-
         if settings.add_to_active_map:
             project = arcpy.mp.ArcGISProject("current")
 
