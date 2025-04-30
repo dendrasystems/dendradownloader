@@ -288,21 +288,31 @@ def test_download_files_in_collections_multiple_assets(config_file, search_respo
 @pytest.mark.parametrize(
     "asset,expected_url, expected_filename",
     [
-        ({"href": "https://fake.com/rgbdownload.tif", "title": "RGB"}, "https://fake.com/rgbdownload.tif", "RGB.tif"),
+        (
+            {"href": "https://fake.com/rgbdownload.tif", "title": "RGB", "type": "image/tiff; application=geotiff"},
+            "https://fake.com/rgbdownload.tif",
+            "RGB.tif",
+        ),
         (
             {"href": "https://fake.com/shapefile.zip", "title": "Area Classification"},
             "https://fake.com/shapefile.zip",
             "Area Classification.zip",
         ),
         (
-            {"href": "https://fake.com/slope.tif", "title": "Slope < 400m"},
+            {"href": "https://fake.com/slope.tif", "title": "Slope < 400m", "type": "image/tiff; application=geotiff"},
             "https://fake.com/slope.tif",
             "Slope under 400m.tif",
+        ),
+        (
+            {"href": "https://fake.com/TIFF", "title": "RGB", "type": "image/tiff; application=geotiff"},
+            "https://fake.com/TIFF",
+            "RGB.tif",
         ),
         (
             {
                 "href": "https://fake.com/api/feature-label/geojson_summary?skai_feature=123&category=999&signature=fake",
                 "title": "Stable / Erosion",
+                "type": "application/geo+json",
             },
             "https://fake.com/api/feature-label/geojson_summary?skai_feature=123&category=999&signature=fake",
             "Stable Erosion.geojson",

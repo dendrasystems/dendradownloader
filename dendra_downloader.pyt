@@ -2,6 +2,7 @@
 
 import argparse
 import configparser
+import mimetypes
 import re
 from collections import namedtuple
 from collections.abc import Generator
@@ -114,6 +115,25 @@ def format_bytes(size: int) -> str:
         return f"{size / (1024**2):.2f} MB"
     else:
         return f"{size / (1024**3):.2f} GB"
+
+
+def guess_suffix(mimetype: str) -> str:
+    """
+    Guess the file extension based on the MIME type.
+
+    Args:
+        mimetype (str): The MIME type of the file.
+
+    Returns:
+        str: The guessed file extension.
+    """
+    match mimetype:
+        case "application/geo+json":
+            return ".geojson"
+        case x if "image/tif" in x:
+            return ".tif"
+        case _:
+            return mimetypes.guess_extension(mimetype)
 
 
 def progress_bar(done: int, total: int, progress: int) -> str:
@@ -302,11 +322,15 @@ def prepare_download(asset: dict) -> tuple[ParseResult, Path]:
 
     filename = Path(parsed_download_href.path.split("/")[-1])
 
+    suffix = filename.suffix
+    if not suffix:
+        suffix = guess_suffix(asset["type"]) or ""
+
     # Override the downloaded filename with the asset title if available
     if asset.get("title"):
         new_filename = filename.with_name(format_for_filename(asset["title"]))
         if not new_filename.suffix:
-            new_filename = new_filename.with_suffix(filename.suffix)
+            new_filename = new_filename.with_suffix(suffix)
         filename = new_filename
 
     return parsed_download_href, filename
