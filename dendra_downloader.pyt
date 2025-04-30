@@ -307,8 +307,10 @@ def format_for_filename(filename: str) -> str:
     """
     Format the filename to be compatible with Windows.
     """
-    # Replace invalid characters with an underscore
+    # Drop invalid characters
     filename = re.sub(r"[:\"/\|?*]", "", filename)
+
+    # Replace duplicate spaces with a single space
     filename = re.sub(r"\s+", " ", filename)
 
     # Special case for <> as they convey meaning
