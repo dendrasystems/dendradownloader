@@ -7,7 +7,7 @@ from collections import namedtuple
 from collections.abc import Generator
 from functools import wraps
 from pathlib import Path
-from urllib.parse import ParseResult, urlparse
+from urllib.parse import ParseResult, urlencode, urlparse
 
 try:
     import arcpy
@@ -96,12 +96,37 @@ def format_mb(size: int) -> str:
     return f"{size / 1024 / 1024:.2f}"
 
 
+def format_bytes(size: int) -> str:
+    """
+    Format bytes into KB, MB, or GB depending on the size.
+
+    Args:
+        size (int): The size in bytes.
+
+    Returns:
+        str: The formatted size as a string.
+    """
+    if size < 1024:
+        return f"{size} B"
+    elif size < 1024**2:
+        return f"{size / 1024:.2f} KB"
+    elif size < 1024**3:
+        return f"{size / (1024**2):.2f} MB"
+    else:
+        return f"{size / (1024**3):.2f} GB"
+
+
 def progress_bar(done: int, total: int, progress: int) -> str:
     return f"\r[{'=' * done}{' ' * (50 - done)}] {format_mb(progress)}/{format_mb(total)} MiB"
 
 
 def download_file(
-    *, data_dir: str | Path, replace_existing: bool, parsed_url: ParseResult, local_filename: Path
+    *,
+    data_dir: str | Path,
+    replace_existing: bool,
+    parsed_url: ParseResult,
+    local_filename: Path,
+    argis_progress_msg: str,
 ) -> str:
     local_file_path = data_dir / local_filename
 
@@ -112,6 +137,10 @@ def download_file(
             total_size = int(response.headers.get("content-length", 0))
             downloaded_size = 0
 
+            if arcpy:
+                arcpy.SetProgressor("step", f"{argis_progress_msg}  [{format_bytes(total_size)}]", 0, 100, 1)
+                current_step = 0
+
             with open(str(local_file_path), "wb") as f:
                 for chunk in response.iter_content(chunk_size=100 * 1024):
                     f.write(chunk)
@@ -120,11 +149,22 @@ def download_file(
                         done = 0
                     else:
                         done = int(50 * downloaded_size / total_size)
+                    if arcpy:
+                        try:
+                            progress = (downloaded_size / total_size) // 0.01
+                        except ZeroDivisionError:
+                            progress = 0
+                        if progress > current_step:
+                            current_step = progress
+                            arcpy.SetProgressorPosition(int(current_step))
                     print(  # noqa: T201
                         progress_bar(done, total_size, downloaded_size),
                         end="",
                     )
             print()  # noqa: T201
+
+            if arcpy:
+                arcpy.SetProgressorPosition(100)
 
     return local_file_path
 
@@ -147,6 +187,42 @@ def get_next_link(response_data: dict) -> str | None:
         pass
 
 
+def get_search_url(catalogue_url: str, query: dict) -> str:
+    """
+    Construct the search URL for the STAC API.
+
+    Returns the search URL.
+    """
+    if collections := query.get("collections"):
+        if isinstance(collections, list):
+            query["collections"] = ",".join(str(x) for x in collections)
+
+    parsed_url = urlparse(catalogue_url + "/search")
+    parsed_url = parsed_url._replace(query=urlencode(query, safe=","))
+    return parsed_url.geturl()
+
+
+def get_result_count(auth_token: str, catalogue_url: str, collection_ids: list[str] | None = None) -> int:
+    """
+    Use STAC search API to retrieve the number of items.
+
+    ConformsTo: https://api.stacspec.org/v1.0.0/item-search
+    """
+    query = {"collections": collection_ids} if collection_ids else {}
+    query["limit"] = 0
+    catalogue_search_url = get_search_url(catalogue_url, query=query)
+
+    response = requests.get(
+        catalogue_search_url,
+        headers={"Authorization": f"Token {auth_token}"},
+        timeout=60,
+    )
+    response.raise_for_status()
+    response_data = response.json()
+
+    return response_data["numberMatched"]
+
+
 def search(
     auth_token: str, catalogue_url: str, collection_ids: list[str] | None = None
 ) -> Generator[list[dict], None, None]:
@@ -155,10 +231,8 @@ def search(
 
     ConformsTo: https://api.stacspec.org/v1.0.0/item-search
     """
-    catalogue_search_url = catalogue_url + "/search"
-
-    if collection_ids:
-        catalogue_search_url += f"?collections={','.join(collection_ids)}"
+    query = {"collections": collection_ids} if collection_ids else {}
+    catalogue_search_url = get_search_url(catalogue_url, query=query)
 
     while catalogue_search_url:
         response = requests.get(
@@ -248,8 +322,17 @@ def download_files_in_collections(
 
     http_error_400s = []
 
+    result_count = get_result_count(settings.auth_token, settings.catalogue_url, collection_ids)
+
+    if arcpy:
+        arcpy.SetProgressorLabel(f"Found {result_count} items...")
+
     search_results = search(settings.auth_token, settings.catalogue_url, collection_ids)
+    items_processed = 0
+
     for feature in search_results:
+        base_progress_msg = f"({items_processed + 1}/{result_count}) STAC Items. Downloading assets:"
+
         collection_id = feature["collection"]
         collection_dir = data_dir / get_collection_title(feature)
 
@@ -260,7 +343,7 @@ def download_files_in_collections(
         if not collection_dir.exists():
             collection_dir.mkdir(parents=True)
 
-        for asset in feature["assets"].values():
+        for i, asset in enumerate(feature["assets"].values()):
             parsed_download_href, filename = prepare_download(asset)
 
             try:
@@ -270,6 +353,7 @@ def download_files_in_collections(
                         replace_existing=settings.redownload,
                         parsed_url=parsed_download_href,
                         local_filename=filename,
+                        argis_progress_msg=f"{base_progress_msg} ({i + 1}/{len(feature['assets'])}) {filename.name}",  # noqa: T201
                     )
                 )
             except requests.HTTPError as e:
@@ -278,6 +362,8 @@ def download_files_in_collections(
                     http_error_400s.append(collection_id)
                 else:
                     raise e
+
+        items_processed += 1
 
     return http_error_400s
 
