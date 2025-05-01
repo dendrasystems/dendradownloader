@@ -22,8 +22,33 @@ dd = import_from_file("./dendra_downloader.pyt", "dendra_downloader.pyt")
 @pytest.fixture
 def config_file(tmpdir):
     config_path = tmpdir / "config.ini"
-    fake_config = (
-        f"[unit.test]\nauth_token: foobar\ncatalogue_url: http://www.example.com/catalogue_1\ndata_dir: {tmpdir}"
+    fake_config = "\n".join(
+        [
+            "[unit.test]",
+            "auth_token: foobar",
+            "catalogue_url: http://www.example.com/catalogue_1",
+            f"data_dir: {tmpdir}",
+            "redownload: false",
+            "add_to_active_map: false",
+        ]
+    )
+
+    config_path.write_text(fake_config, encoding="utf-8")
+    return tmpdir, config_path
+
+
+@pytest.fixture
+def full_config_file(tmpdir):
+    config_path = tmpdir / "config.ini"
+    fake_config = "\n".join(
+        [
+            "[unit.test]",
+            "auth_token: foobar",
+            "catalogue_url: http://www.example.com/catalogue_1",
+            f"data_dir: {tmpdir}",
+            "redownload: true",
+            "add_to_active_map: true",
+        ]
     )
     config_path.write_text(fake_config, encoding="utf-8")
     return tmpdir, config_path
@@ -101,8 +126,22 @@ def test_load_settings(config_file):
     assert settings.auth_token == "foobar"  # noqa s105
     assert settings.catalogue_url == "http://www.example.com/catalogue_1"
     assert settings.data_dir == data_dir
-    assert not settings.redownload
-    assert not settings.add_to_active_map
+    assert settings.redownload is False
+    assert settings.add_to_active_map is False
+
+
+def test_load_all_settings(full_config_file):
+    """
+    Test loads all settings
+    """
+    data_dir, config_path = full_config_file
+    settings = dd.Settings(config_path, "unit.test")
+
+    assert settings.auth_token == "foobar"  # noqa s105
+    assert settings.catalogue_url == "http://www.example.com/catalogue_1"
+    assert settings.data_dir == data_dir
+    assert settings.redownload is True
+    assert settings.add_to_active_map is True
 
 
 def test_show_settings(config_file, capsys):
@@ -288,16 +327,34 @@ def test_download_files_in_collections_multiple_assets(config_file, search_respo
 @pytest.mark.parametrize(
     "asset,expected_url, expected_filename",
     [
-        ({"href": "https://fake.com/rgbdownload.tif", "title": "RGB"}, "https://fake.com/rgbdownload.tif", "RGB.tif"),
+        (
+            {"href": "https://fake.com/rgbdownload.tif", "title": "RGB", "type": "image/tiff; application=geotiff"},
+            "https://fake.com/rgbdownload.tif",
+            "RGB.tif",
+        ),
         (
             {"href": "https://fake.com/shapefile.zip", "title": "Area Classification"},
             "https://fake.com/shapefile.zip",
             "Area Classification.zip",
         ),
         (
-            {"href": "https://fake.com/slope.tif", "title": "Slope < 400m"},
+            {"href": "https://fake.com/slope.tif", "title": "Slope < 400m", "type": "image/tiff; application=geotiff"},
             "https://fake.com/slope.tif",
             "Slope under 400m.tif",
+        ),
+        (
+            {"href": "https://fake.com/TIFF", "title": "RGB", "type": "image/tiff; application=geotiff"},
+            "https://fake.com/TIFF",
+            "RGB.tif",
+        ),
+        (
+            {
+                "href": "https://fake.com/api/feature-label/geojson_summary?skai_feature=123&category=999&signature=fake",
+                "title": "Stable / Erosion",
+                "type": "application/geo+json",
+            },
+            "https://fake.com/api/feature-label/geojson_summary?skai_feature=123&category=999&signature=fake",
+            "Stable Erosion.geojson",
         ),
     ],
 )
@@ -380,7 +437,6 @@ class TestCommandLine:
             ],
         ):
             dd.command_line()
-
         assert capsys.readouterr().out == "1 Collection1\n"
 
     @patch.object(dd, "download_files_in_collections", return_value=[])

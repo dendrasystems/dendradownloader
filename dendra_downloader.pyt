@@ -2,6 +2,7 @@
 
 import argparse
 import configparser
+import mimetypes
 import re
 from collections import namedtuple
 from collections.abc import Generator
@@ -52,18 +53,21 @@ class Settings:
     def __init__(self, config_path: str | Path, host: str):
         self.config = get_config(config_path)
         self.host = host
-        self.auth_token = self._get_setting("auth_token")
-        self.catalogue_url = self._get_setting("catalogue_url")
-        self.data_dir = Path(self._get_setting("data_dir"))
+
+        for setting in self.settings:
+            setattr(self, setting, self._get_setting(setting))
 
     def _get_setting(self, setting_name: str) -> bool | str:
         """
         Retrieve the setting from the config file.
         """
-        if setting_name == "redownload" or setting_name == "add_to_active_map":
-            setting_value = self.config[self.host].getboolean(setting_name)
-        else:
-            setting_value = self.config[self.host].get(setting_name)
+        match setting_name:
+            case "redownload" | "add_to_active_map":
+                setting_value = self.config[self.host].getboolean(setting_name)
+            case "data_dir":
+                setting_value = Path(self.config[self.host].get(setting_name))
+            case _:
+                setting_value = self.config[self.host].get(setting_name)
 
         if setting_value is None and setting_name in REQUIRED_SETTINGS:
             raise SettingsError(REQUIRED_SETTINGS[setting_name])
@@ -114,6 +118,25 @@ def format_bytes(size: int) -> str:
         return f"{size / (1024**2):.2f} MB"
     else:
         return f"{size / (1024**3):.2f} GB"
+
+
+def guess_suffix(mimetype: str) -> str:
+    """
+    Guess the file extension based on the MIME type.
+
+    Args:
+        mimetype (str): The MIME type of the file.
+
+    Returns:
+        str: The guessed file extension.
+    """
+    match mimetype:
+        case "application/geo+json":
+            return ".geojson"
+        case x if "image/tif" in x:
+            return ".tif"
+        case _:
+            return mimetypes.guess_extension(mimetype)
 
 
 def progress_bar(done: int, total: int, progress: int) -> str:
@@ -280,19 +303,20 @@ def get_collection_title(item: dict) -> str | None:
         pass
 
 
-def format_filename(filename: Path) -> str:
+def format_for_filename(filename: str) -> str:
     """
     Format the filename to be compatible with Windows.
     """
-    file_name = filename.name
+    # Drop invalid characters
+    filename = re.sub(r"[:\"/\|?*]", "", filename)
 
-    # Replace invalid characters with an underscore
-    file_name = re.sub(r"[:\"/\|?*]", "", file_name)
+    # Replace duplicate spaces with a single space
+    filename = re.sub(r"\s+", " ", filename)
 
     # Special case for <> as they convey meaning
-    file_name = file_name.replace("<", "under")
-    file_name = file_name.replace(">", "over")
-    return filename.with_name(file_name)
+    filename = filename.replace("<", "under")
+    filename = filename.replace(">", "over")
+    return filename
 
 
 def prepare_download(asset: dict) -> tuple[ParseResult, Path]:
@@ -303,14 +327,16 @@ def prepare_download(asset: dict) -> tuple[ParseResult, Path]:
 
     filename = Path(parsed_download_href.path.split("/")[-1])
 
+    suffix = filename.suffix
+    if not suffix:
+        suffix = guess_suffix(asset["type"]) or ""
+
     # Override the downloaded filename with the asset title if available
     if asset.get("title"):
-        new_filename = filename.with_name(asset["title"])
+        new_filename = filename.with_name(format_for_filename(asset["title"]))
         if not new_filename.suffix:
-            new_filename = new_filename.with_suffix(filename.suffix)
+            new_filename = new_filename.with_suffix(suffix)
         filename = new_filename
-    # Format the filename to be compatible with Windows
-    filename = format_filename(filename)
 
     return parsed_download_href, filename
 
@@ -463,7 +489,6 @@ class DendraDownloader:
         config_path = Path(parameters.config.valueAsText)
         settings = Settings(config_path, host)
         active_map = None
-
         if settings.add_to_active_map:
             project = arcpy.mp.ArcGISProject("current")
 
