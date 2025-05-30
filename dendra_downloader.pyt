@@ -8,6 +8,7 @@ from collections import namedtuple
 from collections.abc import Generator
 from functools import wraps
 from pathlib import Path
+from typing import Optional, Union
 from urllib.parse import ParseResult, urlencode, urlparse
 
 try:
@@ -50,24 +51,23 @@ class Settings:
     redownload: bool = False
     add_to_active_map: bool = False
 
-    def __init__(self, config_path: str | Path, host: str):
+    def __init__(self, config_path: Union[str, Path], host: str):
         self.config = get_config(config_path)
         self.host = host
 
         for setting in self.settings:
             setattr(self, setting, self._get_setting(setting))
 
-    def _get_setting(self, setting_name: str) -> bool | str:
+    def _get_setting(self, setting_name: str) -> Union[bool, str]:
         """
         Retrieve the setting from the config file.
         """
-        match setting_name:
-            case "redownload" | "add_to_active_map":
-                setting_value = self.config[self.host].getboolean(setting_name)
-            case "data_dir":
-                setting_value = Path(self.config[self.host].get(setting_name))
-            case _:
-                setting_value = self.config[self.host].get(setting_name)
+        if setting_name in ["redownload", "add_to_active_map"]:
+            setting_value = self.config[self.host].getboolean(setting_name)
+        elif setting_name == "data_dir":
+            setting_value = Path(self.config[self.host].get(setting_name))
+        else:
+            setting_value = self.config[self.host].get(setting_name)
 
         if setting_value is None and setting_name in REQUIRED_SETTINGS:
             raise SettingsError(REQUIRED_SETTINGS[setting_name])
@@ -130,13 +130,12 @@ def guess_suffix(mimetype: str) -> str:
     Returns:
         str: The guessed file extension.
     """
-    match mimetype:
-        case "application/geo+json":
-            return ".geojson"
-        case x if "image/tif" in x:
-            return ".tif"
-        case _:
-            return mimetypes.guess_extension(mimetype)
+    if mimetype == "application/geo+json":
+        return ".geojson"
+    elif "image/tif" in mimetype:
+        return ".tif"
+    else:
+        return mimetypes.guess_extension(mimetype)
 
 
 def progress_bar(done: int, total: int, progress: int) -> str:
@@ -145,7 +144,7 @@ def progress_bar(done: int, total: int, progress: int) -> str:
 
 def download_file(
     *,
-    data_dir: str | Path,
+    data_dir: Union[str, Path],
     replace_existing: bool,
     parsed_url: ParseResult,
     local_filename: Path,
@@ -192,13 +191,13 @@ def download_file(
     return local_file_path
 
 
-def get_config(config_path: str | Path):
+def get_config(config_path: Union[str, Path]):
     config = configparser.ConfigParser()
     config.read([config_path])
     return config
 
 
-def get_next_link(response_data: dict) -> str | None:
+def get_next_link(response_data: dict) -> Optional[str]:
     """
     Retrieve the next link from the response data.
 
@@ -225,7 +224,7 @@ def get_search_url(catalogue_url: str, query: dict) -> str:
     return parsed_url.geturl()
 
 
-def get_result_count(auth_token: str, catalogue_url: str, collection_ids: list[str] | None = None) -> int:
+def get_result_count(auth_token: str, catalogue_url: str, collection_ids: Optional[list[str]] = None) -> int:
     """
     Use STAC search API to retrieve the number of items.
 
@@ -247,7 +246,7 @@ def get_result_count(auth_token: str, catalogue_url: str, collection_ids: list[s
 
 
 def search(
-    auth_token: str, catalogue_url: str, collection_ids: list[str] | None = None
+    auth_token: str, catalogue_url: str, collection_ids: Optional[list[str]] = None
 ) -> Generator[list[dict], None, None]:
     """
     Use STAC search API to retrieve matching items.
@@ -291,7 +290,7 @@ def get_available_collections(auth_token: str, catalogue_url: str) -> list[str]:
     return [f"{collection['id']} {collection['title']}" for collection in collections]
 
 
-def get_collection_title(item: dict) -> str | None:
+def get_collection_title(item: dict) -> Optional[str]:
     """
     Retrieve the collection name from the item's links.
 
