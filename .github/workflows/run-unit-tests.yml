@@ -17,19 +17,19 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
-    - name: Set up Python 3.10
+    - name: Set up Python 3.9
       uses: actions/setup-python@v3
       with:
-        python-version: "3.10"
+        python-version: "3.9"
     - uses: pre-commit/action@v3.0.1
   tests:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
-    - name: Set up Python 3.10
+    - name: Set up Python 3.9
       uses: actions/setup-python@v3
       with:
-        python-version: "3.10"
+        python-version: "3.9"
     - name: Install poetry
       uses: abatilo/actions-poetry@v4
     - name: Install dependencies
